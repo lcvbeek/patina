@@ -3,6 +3,12 @@
   "version": "0.6.0",
   "description": "Shared AI instructions that compound over time",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "patina": "dist/index.js"
   },
