@@ -2,3 +2,4 @@ node_modules/
 dist/
 .retro/
 *.js.map
+coverage/
