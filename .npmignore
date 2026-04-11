@@ -1,0 +1,6 @@
+src/
+.patina/
+bin/
+*.map
+tsconfig.json
+.gitignore

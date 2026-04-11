@@ -1,0 +1,52 @@
+{
+  "name": "@lcvbeek/patina",
+  "version": "0.6.0",
+  "description": "Shared AI instructions that compound over time",
+  "type": "module",
+  "bin": {
+    "patina": "dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lcvbeek/patina.git"
+  },
+  "homepage": "https://patina-web-rho.vercel.app/",
+  "bugs": {
+    "url": "https://github.com/lcvbeek/patina/issues"
+  },
+  "keywords": [
+    "ai",
+    "retrospective",
+    "claude",
+    "developer-tools",
+    "team"
+  ],
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.37.0",
+    "commander": "^12.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "markdownlint-cli2": "^0.22.0",
+    "prettier": "^3.8.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
+  }
+}
