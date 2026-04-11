@@ -1,3 +1,5 @@
+// Default PATINA.md. Gets overwritten by first `patina run`, used as formatting and styling scaffold for onboarding.
+
 # AI Operating Constitution
 
 > Last updated: 2026-04-11
