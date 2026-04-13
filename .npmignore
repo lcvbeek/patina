@@ -4,3 +4,4 @@ bin/
 *.map
 tsconfig.json
 .gitignore
+coverage/
