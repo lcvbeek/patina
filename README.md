@@ -134,7 +134,7 @@ Reflection questions can be customised by adding `.patina/questions.json` to the
 
 `patina init` installs a Claude Code skill at `~/.claude/skills/patina/`. Inside any Claude Code session you can answer reflection questions in chat without switching to a terminal:
 
-```
+```bash
 /patina next                           # show the next unanswered question
 /patina reflect felt good overall      # record an answer
 /patina capture near-miss: almost...   # capture a moment
