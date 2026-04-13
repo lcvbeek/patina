@@ -2,6 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@lcvbeek/patina.svg)](https://www.npmjs.com/package/@lcvbeek/patina)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+![Test coverage](https://img.shields.io/coverallsCoverage/github/lcvbeek/patina)
 
 **Claude doesn't tell you when its instructions are stale. Patina does.**
 
