@@ -1,90 +1,48 @@
-import { describe, it, expect } from "vitest";
-import { parseCycleFile, tokenBar, formatK, deltaLabel } from "./layers.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import fs from "fs";
 
 // ---------------------------------------------------------------------------
-// formatK
+// Mock fs and storage before importing the module under test
 // ---------------------------------------------------------------------------
 
-describe("formatK", () => {
-  it("returns plain number for values under 1000", () => {
-    expect(formatK(999)).toBe("999");
-    expect(formatK(0)).toBe("0");
-  });
-
-  it("formats 1000 as 1.0K", () => {
-    expect(formatK(1000)).toBe("1.0K");
-  });
-
-  it("formats 1500 as 1.5K", () => {
-    expect(formatK(1500)).toBe("1.5K");
-  });
-
-  it("formats large numbers", () => {
-    expect(formatK(10000)).toBe("10.0K");
-  });
+vi.mock("fs");
+vi.mock("../lib/storage.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage.js")>();
+  return {
+    ...actual,
+    assertInitialised: vi.fn(),
+    CYCLES_DIR: ".patina/cycles",
+  };
 });
 
 // ---------------------------------------------------------------------------
-// tokenBar
+// Imports (after mocks are registered)
 // ---------------------------------------------------------------------------
 
-describe("tokenBar", () => {
-  it("contains exactly 16 bar characters between delimiters", () => {
-    const bar = tokenBar(500, 1000);
-    // Strip ANSI escape codes, then count characters between ▕ and ▏
-    const stripped = bar.replace(/\x1b\[[0-9;]*m/g, "");
-    const inner = stripped.slice(1, -1); // remove ▕ and ▏
-    expect(inner.length).toBe(16);
-  });
+import {
+  parseCycleFile,
+  tokenBar,
+  formatK,
+  deltaLabel,
+  layersCommand,
+  DEFAULT_LIMIT,
+  BAND_WIDTH,
+} from "./layers.js";
+import { assertInitialised } from "../lib/storage.js";
 
-  it("fills all bars when avgTokens equals maxTokens", () => {
-    const bar = tokenBar(1000, 1000);
-    const stripped = bar.replace(/\x1b\[[0-9;]*m/g, "");
-    const inner = stripped.slice(1, -1);
-    expect(inner).toBe("█".repeat(16));
-  });
-
-  it("fills at least 1 bar when avgTokens is 0", () => {
-    // Math.max(1, 0) → 1 filled bar
-    const bar = tokenBar(0, 1000);
-    const stripped = bar.replace(/\x1b\[[0-9;]*m/g, "");
-    const inner = stripped.slice(1, -1);
-    expect(inner[0]).toBe("█");
-  });
-});
+const mockAssertInitialised = assertInitialised as ReturnType<typeof vi.fn>;
+const mockFs = vi.mocked(fs);
 
 // ---------------------------------------------------------------------------
-// deltaLabel
+// Helpers
 // ---------------------------------------------------------------------------
 
-describe("deltaLabel", () => {
-  it("returns empty string when values are equal", () => {
-    expect(deltaLabel(500, 500)).toBe("");
-  });
-
-  it("contains ↓ when current is less than prior (improvement)", () => {
-    const label = deltaLabel(400, 500);
-    // Strip ANSI
-    const stripped = label.replace(/\x1b\[[0-9;]*m/g, "");
-    expect(stripped).toContain("↓");
-    expect(stripped).toContain("20%"); // (500-400)/500 * 100 = 20%
-  });
-
-  it("contains ↑ when current is greater than prior (regression)", () => {
-    const label = deltaLabel(600, 500);
-    const stripped = label.replace(/\x1b\[[0-9;]*m/g, "");
-    expect(stripped).toContain("↑");
-    expect(stripped).toContain("20%");
-  });
-
-  it("returns empty string for very small difference rounding to 0%", () => {
-    // 1/1000 = 0.1% rounds to 0
-    expect(deltaLabel(1001, 1000)).toBe("");
-  });
-});
+function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
 
 // ---------------------------------------------------------------------------
-// parseCycleFile
+// Sample cycle file content
 // ---------------------------------------------------------------------------
 
 const SAMPLE_CYCLE = `# Retro Cycle — 2025-03-15
@@ -125,8 +83,154 @@ const ONBOARDING_CYCLE = `# Onboarding Cycle — 2025-01-01
 
 ## Summary
 
-${`(first cycle setup)`} — established initial working agreements.
+(first cycle setup) — established initial working agreements.
 `;
+
+const SUMMARY_HEADER_VARIANT = `## Summary
+
+Short summary here.
+`;
+
+// ---------------------------------------------------------------------------
+// formatK
+// ---------------------------------------------------------------------------
+
+describe("formatK", () => {
+  it("returns plain number for values under 1000", () => {
+    expect(formatK(999)).toBe("999");
+    expect(formatK(0)).toBe("0");
+  });
+
+  it("formats 1000 as 1.0K", () => {
+    expect(formatK(1000)).toBe("1.0K");
+  });
+
+  it("formats 1500 as 1.5K", () => {
+    expect(formatK(1500)).toBe("1.5K");
+  });
+
+  it("formats large numbers", () => {
+    expect(formatK(10000)).toBe("10.0K");
+  });
+
+  it("formats exactly 1 as '1'", () => {
+    expect(formatK(1)).toBe("1");
+  });
+
+  it("formats 999 as '999' (boundary below 1K)", () => {
+    expect(formatK(999)).toBe("999");
+  });
+
+  it("formats 2500 as 2.5K", () => {
+    expect(formatK(2500)).toBe("2.5K");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tokenBar
+// ---------------------------------------------------------------------------
+
+describe("tokenBar", () => {
+  it("contains exactly 16 bar characters between delimiters", () => {
+    const bar = tokenBar(500, 1000);
+    const stripped = stripAnsi(bar);
+    const inner = stripped.slice(1, -1); // remove ▕ and ▏
+    expect(inner.length).toBe(16);
+  });
+
+  it("fills all bars when avgTokens equals maxTokens", () => {
+    const bar = tokenBar(1000, 1000);
+    const stripped = stripAnsi(bar);
+    const inner = stripped.slice(1, -1);
+    expect(inner).toBe("█".repeat(16));
+  });
+
+  it("fills at least 1 bar when avgTokens is 0", () => {
+    const bar = tokenBar(0, 1000);
+    const stripped = stripAnsi(bar);
+    const inner = stripped.slice(1, -1);
+    expect(inner[0]).toBe("█");
+    // Only 1 filled, rest empty
+    expect(inner.slice(1)).toBe("░".repeat(15));
+  });
+
+  it("starts with ▕ and ends with ▏", () => {
+    const bar = tokenBar(500, 1000);
+    const stripped = stripAnsi(bar);
+    expect(stripped[0]).toBe("▕");
+    expect(stripped[stripped.length - 1]).toBe("▏");
+  });
+
+  it("fills half the bar for avgTokens = maxTokens / 2", () => {
+    const bar = tokenBar(500, 1000);
+    const stripped = stripAnsi(bar);
+    const inner = stripped.slice(1, -1);
+    // 500/1000 * 16 = 8, so 8 filled
+    expect(inner).toBe("█".repeat(8) + "░".repeat(8));
+  });
+
+  it("fills minimum 1 bar even for very small ratio", () => {
+    const bar = tokenBar(1, 10000);
+    const stripped = stripAnsi(bar);
+    const inner = stripped.slice(1, -1);
+    expect(inner[0]).toBe("█");
+    expect(inner.length).toBe(16);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deltaLabel
+// ---------------------------------------------------------------------------
+
+describe("deltaLabel", () => {
+  it("returns empty string when values are equal", () => {
+    expect(deltaLabel(500, 500)).toBe("");
+  });
+
+  it("contains ↓ when current is less than prior (improvement)", () => {
+    const label = deltaLabel(400, 500);
+    const stripped = stripAnsi(label);
+    expect(stripped).toContain("↓");
+    expect(stripped).toContain("20%");
+  });
+
+  it("contains ↑ when current is greater than prior (regression)", () => {
+    const label = deltaLabel(600, 500);
+    const stripped = stripAnsi(label);
+    expect(stripped).toContain("↑");
+    expect(stripped).toContain("20%");
+  });
+
+  it("returns empty string for very small difference rounding to 0%", () => {
+    // 1/1000 = 0.1% rounds to 0
+    expect(deltaLabel(1001, 1000)).toBe("");
+  });
+
+  it("handles large improvement correctly", () => {
+    const label = deltaLabel(100, 200);
+    const stripped = stripAnsi(label);
+    expect(stripped).toContain("↓");
+    expect(stripped).toContain("50%");
+  });
+
+  it("handles large regression correctly", () => {
+    const label = deltaLabel(300, 100);
+    const stripped = stripAnsi(label);
+    expect(stripped).toContain("↑");
+    expect(stripped).toContain("200%");
+  });
+
+  it("rounds fractional percentage to nearest integer", () => {
+    // 155/150 = 3.33...% rounds to 3%
+    const label = deltaLabel(155, 150);
+    const stripped = stripAnsi(label);
+    expect(stripped).toContain("3%");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseCycleFile
+// ---------------------------------------------------------------------------
 
 describe("parseCycleFile", () => {
   it("parses session count from metrics table", () => {
@@ -134,12 +238,12 @@ describe("parseCycleFile", () => {
     expect(layer.sessions).toBe(8);
   });
 
-  it("parses avg tokens (with comma formatting)", () => {
+  it("parses avg tokens with comma formatting", () => {
     const layer = parseCycleFile(SAMPLE_CYCLE, "2025-03-15");
     expect(layer.avgTokens).toBe(6000);
   });
 
-  it("parses rework percentage", () => {
+  it("parses rework percentage as float", () => {
     const layer = parseCycleFile(SAMPLE_CYCLE, "2025-03-15");
     expect(layer.reworkPct).toBe(25.0);
   });
@@ -159,6 +263,14 @@ describe("parseCycleFile", () => {
     expect(layer.summary).toBe(exactSummary);
   });
 
+  it("does not truncate summary shorter than 72 characters", () => {
+    const shortSummary = "Short summary.";
+    const doc = `## Cycle Summary\n\n${shortSummary}\n`;
+    const layer = parseCycleFile(doc, "2025-01-01");
+    expect(layer.summary).toBe(shortSummary);
+    expect(layer.summary.endsWith("…")).toBe(false);
+  });
+
   it("returns isOnboarding true for onboarding cycle files", () => {
     const layer = parseCycleFile(ONBOARDING_CYCLE, "2025-01-01");
     expect(layer.isOnboarding).toBe(true);
@@ -175,10 +287,454 @@ describe("parseCycleFile", () => {
     expect(layer.avgTokens).toBeUndefined();
     expect(layer.reworkPct).toBeUndefined();
     expect(layer.summary).toBe("");
+    expect(layer.sectionChanged).toBeUndefined();
   });
 
   it("sets the date field from the parameter", () => {
     const layer = parseCycleFile(SAMPLE_CYCLE, "2025-03-15");
     expect(layer.date).toBe("2025-03-15");
+  });
+
+  it("parses sectionChanged from **Section:** line", () => {
+    const layer = parseCycleFile(SAMPLE_CYCLE, "2025-03-15");
+    expect(layer.sectionChanged).toBe("1. Working Agreements");
+  });
+
+  it("returns undefined for sectionChanged when not present", () => {
+    const doc = `## Cycle Summary\n\nSome summary.\n`;
+    const layer = parseCycleFile(doc, "2025-01-01");
+    expect(layer.sectionChanged).toBeUndefined();
+  });
+
+  it("accepts '## Summary' header (non-Cycle variant)", () => {
+    const layer = parseCycleFile(SUMMARY_HEADER_VARIANT, "2025-06-01");
+    expect(layer.summary).toBe("Short summary here.");
+  });
+
+  it("accepts '## Cycle Summary' header", () => {
+    const doc = `## Cycle Summary\n\nThe main summary text.\n`;
+    const layer = parseCycleFile(doc, "2025-06-01");
+    expect(layer.summary).toBe("The main summary text.");
+  });
+
+  it("handles avg tokens without comma formatting", () => {
+    const doc = `| Avg tokens/session | 500 |\n`;
+    const layer = parseCycleFile(doc, "2025-01-01");
+    expect(layer.avgTokens).toBe(500);
+  });
+
+  it("handles large avg tokens with multiple commas", () => {
+    const doc = `| Avg tokens/session | 1,234,567 |\n`;
+    const layer = parseCycleFile(doc, "2025-01-01");
+    expect(layer.avgTokens).toBe(1234567);
+  });
+
+  it("parses integer rework percentage (no decimal)", () => {
+    const doc = `| Sessions with rework | 3 (10%) |\n`;
+    const layer = parseCycleFile(doc, "2025-01-01");
+    expect(layer.reworkPct).toBe(10);
+  });
+
+  it("parses decimal rework percentage", () => {
+    const doc = `| Sessions with rework | 1 (8.3%) |\n`;
+    const layer = parseCycleFile(doc, "2025-01-01");
+    expect(layer.reworkPct).toBe(8.3);
+  });
+
+  it("returns empty summary string when no summary header present", () => {
+    const layer = parseCycleFile("# Just a title\n\nSome prose.\n", "2025-01-01");
+    expect(layer.summary).toBe("");
+  });
+
+  it("trims whitespace from summary", () => {
+    const doc = `## Summary\n\n  trimmed text   \n`;
+    const layer = parseCycleFile(doc, "2025-01-01");
+    expect(layer.summary).toBe("trimmed text");
+  });
+
+  it("trims whitespace from sectionChanged", () => {
+    const doc = `**Section:** 2. Behavior Contract   \n`;
+    const layer = parseCycleFile(doc, "2025-01-01");
+    expect(layer.sectionChanged).toBe("2. Behavior Contract");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// layersCommand — fs mocked
+// ---------------------------------------------------------------------------
+
+describe("layersCommand", () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockAssertInitialised.mockReturnValue(undefined);
+    // Default: .patina dir exists
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
+    vi.clearAllMocks();
+  });
+
+  it("outputs 'No layers yet' when cycles directory does not exist", () => {
+    mockFs.existsSync.mockReturnValue(false);
+
+    layersCommand();
+
+    const output = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    expect(output).toContain("No layers yet");
+  });
+
+  it("outputs 'No layers yet' when cycles directory is empty", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([] as unknown as fs.Dirent<NonSharedBuffer>[]);
+
+    layersCommand();
+
+    const output = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    expect(output).toContain("No layers yet");
+  });
+
+  it("outputs 'No layers yet' when directory has no .md files", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "README.txt",
+      ".gitkeep",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+
+    layersCommand();
+
+    const output = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    expect(output).toContain("No layers yet");
+  });
+
+  it("calls assertInitialised before reading the filesystem", () => {
+    mockFs.existsSync.mockReturnValue(false);
+
+    layersCommand();
+
+    expect(mockAssertInitialised).toHaveBeenCalledOnce();
+  });
+
+  it("renders a single cycle file as one layer", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const output = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    expect(output).toContain("2025-03-15");
+  });
+
+  it("includes the summary text in the rendered output", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const output = stripAnsi(consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n"));
+    expect(output).toContain("This cycle showed consistent progress on the core feature set.");
+  });
+
+  it("shows onboarding label for first-cycle files", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-01-01.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(ONBOARDING_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const output = stripAnsi(consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n"));
+    expect(output).toContain("foundation — onboarding cycle");
+  });
+
+  it("shows session count for regular cycles", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const output = stripAnsi(consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n"));
+    expect(output).toContain("8 sessions");
+  });
+
+  it("shows avg tokens for regular cycles", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const output = stripAnsi(consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n"));
+    expect(output).toContain("6.0K avg tokens");
+  });
+
+  it("shows rework percentage for regular cycles", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const output = stripAnsi(consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n"));
+    expect(output).toContain("25% rework");
+  });
+
+  it("renders newest cycle first (reverse chronological order)", () => {
+    const files = ["2025-01-01.md", "2025-02-01.md", "2025-03-01.md"];
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue(files as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand({ limit: 0 });
+
+    const allLines = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    const idx2025_03 = allLines.indexOf("2025-03-01");
+    const idx2025_01 = allLines.indexOf("2025-01-01");
+    expect(idx2025_03).toBeLessThan(idx2025_01);
+  });
+
+  it("limits to DEFAULT_LIMIT (5) files when no limit option is given", () => {
+    const files = [
+      "2025-01-01.md",
+      "2025-02-01.md",
+      "2025-03-01.md",
+      "2025-04-01.md",
+      "2025-05-01.md",
+      "2025-06-01.md",
+    ];
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue(files as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    // With DEFAULT_LIMIT=5, we take allFiles.slice(-5) = last 5
+    // "2025-01-01" should NOT appear (it's the oldest, cut off)
+    const output = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    expect(output).not.toContain("2025-01-01");
+    expect(output).toContain("2025-06-01");
+  });
+
+  it("shows all files when limit=0", () => {
+    const files = [
+      "2025-01-01.md",
+      "2025-02-01.md",
+      "2025-03-01.md",
+      "2025-04-01.md",
+      "2025-05-01.md",
+      "2025-06-01.md",
+    ];
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue(files as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand({ limit: 0 });
+
+    const output = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    expect(output).toContain("2025-01-01");
+    expect(output).toContain("2025-06-01");
+  });
+
+  it("respects a custom limit option", () => {
+    const files = ["2025-01-01.md", "2025-02-01.md", "2025-03-01.md"];
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue(files as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand({ limit: 2 });
+
+    // Last 2: 2025-02-01 and 2025-03-01
+    const output = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    expect(output).not.toContain("2025-01-01");
+    expect(output).toContain("2025-02-01");
+    expect(output).toContain("2025-03-01");
+  });
+
+  it("prints a divider between layers but not after the last", () => {
+    const files = ["2025-01-01.md", "2025-02-01.md", "2025-03-01.md"];
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue(files as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand({ limit: 0 });
+
+    // Count lines containing the divider character ─
+    const dividerLines = consoleSpy.mock.calls
+      .map((c: any) => String(c[0]))
+      .filter((line: string) => stripAnsi(line).includes("─"));
+
+    // 3 layers → 2 dividers
+    expect(dividerLines.length).toBe(2);
+  });
+
+  it("does not print a divider for a single layer", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const dividerLines = consoleSpy.mock.calls
+      .map((c: any) => String(c[0]))
+      .filter((line: string) => stripAnsi(line).includes("─"));
+
+    expect(dividerLines.length).toBe(0);
+  });
+
+  it("renders a token delta when two cycles have avgTokens", () => {
+    const CYCLE_A = `## Cycle Summary\n\nFirst cycle.\n\n| Total sessions | 5 |\n| Avg tokens/session | 4,000 |\n| Sessions with rework | 0 (0%) |\n`;
+    const CYCLE_B = `## Cycle Summary\n\nSecond cycle.\n\n| Total sessions | 5 |\n| Avg tokens/session | 6,000 |\n| Sessions with rework | 0 (0%) |\n`;
+
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-01-01.md",
+      "2025-02-01.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync
+      .mockReturnValueOnce(CYCLE_A as unknown as NonSharedBuffer)
+      .mockReturnValueOnce(CYCLE_B as unknown as NonSharedBuffer);
+
+    layersCommand({ limit: 0 });
+
+    const output = stripAnsi(consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n"));
+    // Newest layer (B) compared to older layer (A): 6000 vs 4000 = +50%
+    expect(output).toContain("50% tokens");
+  });
+
+  it("does not render a token delta for the oldest layer (no prior)", () => {
+    const CYCLE_A = `## Cycle Summary\n\nOldest.\n\n| Total sessions | 5 |\n| Avg tokens/session | 4,000 |\n| Sessions with rework | 0 (0%) |\n`;
+    const CYCLE_B = `## Cycle Summary\n\nNewer.\n\n| Total sessions | 5 |\n| Avg tokens/session | 6,000 |\n| Sessions with rework | 0 (0%) |\n`;
+
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-01-01.md",
+      "2025-02-01.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync
+      .mockReturnValueOnce(CYCLE_A as unknown as NonSharedBuffer)
+      .mockReturnValueOnce(CYCLE_B as unknown as NonSharedBuffer);
+
+    layersCommand({ limit: 0 });
+
+    const lines = consoleSpy.mock.calls.map((c: any) => String(c[0]));
+    // Find the line containing "4.0K avg tokens" — that's the oldest layer stats line
+    const oldestStatsLine = lines.find((l: string) => stripAnsi(l).includes("4.0K avg tokens"));
+    expect(oldestStatsLine).toBeDefined();
+    // The oldest layer should not include "tokens" delta
+    expect(stripAnsi(oldestStatsLine ?? "")).not.toMatch(/[↑↓]\d+% tokens/);
+  });
+
+  it("outputs a leading and trailing blank line around layers", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const calls = consoleSpy.mock.calls;
+    // First and last console.log calls should be empty (blank lines)
+    expect(calls[0][0]).toBe(undefined);
+    expect(calls[calls.length - 1][0]).toBe(undefined);
+  });
+
+  it("handles cycle files with missing metrics gracefully (no crash)", () => {
+    const minimalCycle = `# Cycle 2025-06-01\n\nNo metrics here.\n`;
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-06-01.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(minimalCycle as unknown as NonSharedBuffer);
+
+    expect(() => layersCommand()).not.toThrow();
+
+    const output = consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n");
+    expect(output).toContain("2025-06-01");
+  });
+
+  it("ignores non-.md files in cycles directory", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      ".gitkeep",
+      "README.txt",
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    // Only one cycle file, so readFileSync should be called once
+    expect(mockFs.readFileSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes 'Layer N' label in the output", () => {
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue([
+      "2025-03-15.md",
+    ] as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand();
+
+    const output = stripAnsi(consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n"));
+    expect(output).toContain("Layer 1");
+  });
+
+  it("assigns sequential layer numbers oldest-first", () => {
+    const files = ["2025-01-01.md", "2025-02-01.md"];
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readdirSync.mockReturnValue(files as unknown as fs.Dirent<NonSharedBuffer>[]);
+    mockFs.readFileSync.mockReturnValue(SAMPLE_CYCLE as unknown as NonSharedBuffer);
+
+    layersCommand({ limit: 0 });
+
+    const output = stripAnsi(consoleSpy.mock.calls.map((c: any) => String(c[0])).join("\n"));
+    // Layer 1 = oldest (2025-01-01), Layer 2 = newest (2025-02-01)
+    // Since newest is rendered first, "Layer 2" appears before "Layer 1"
+    const idx2 = output.indexOf("Layer 2");
+    const idx1 = output.indexOf("Layer 1");
+    expect(idx2).toBeLessThan(idx1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEFAULT_LIMIT constant
+// ---------------------------------------------------------------------------
+
+describe("DEFAULT_LIMIT", () => {
+  it("is 5", () => {
+    expect(DEFAULT_LIMIT).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BAND_WIDTH constant (legacy export)
+// ---------------------------------------------------------------------------
+
+describe("BAND_WIDTH", () => {
+  it("is exported as 52", () => {
+    expect(BAND_WIDTH).toBe(52);
   });
 });
