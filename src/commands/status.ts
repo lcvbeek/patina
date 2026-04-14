@@ -17,6 +17,7 @@ import {
   trendArrow,
 } from "../lib/metrics.js";
 import { readGlobalMcpServers, readProjectMcpServers, activeServers, isStale } from "../lib/mcp.js";
+import { modelContextWindow, systemPromptSizeLabel, type SystemPromptLabel } from "../lib/context-snapshot.js";
 
 // ---------------------------------------------------------------------------
 // ANSI colour helpers (no deps)
@@ -46,6 +47,21 @@ function cyan(s: string): string {
 function section(title: string): void {
   console.log(`\n${bold(title)}`);
   console.log(dim("─".repeat(title.length)));
+}
+
+function labelColour(label: SystemPromptLabel): (s: string) => string {
+  switch (label) {
+    case "Lean":
+      return green;
+    case "Moderate":
+      return green;
+    case "Full":
+      return dim;
+    case "Heavy":
+      return yellow;
+    case "Very heavy":
+      return red;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +176,7 @@ export async function statusCommand(): Promise<void> {
     }
   }
 
-  // ── MCP Context Load ──────────────────────────────────────────────────────
+  // ── Context Load ──────────────────────────────────────────────────────────
   const cwd = process.cwd();
   const globalMcp = readGlobalMcpServers(cwd);
   const projectMcp = readProjectMcpServers(cwd);
@@ -169,8 +185,39 @@ export async function statusCommand(): Promise<void> {
   const totalActive = activeGlobal.length + activeProject.length;
 
   const availableFromPlugins = globalMcp.filter((s) => !s.enabled);
-  if (totalActive > 0 || availableFromPlugins.length > 0) {
-    section("MCP Context Load");
+
+  // Derive system prompt token cost and model from ingested session snapshots
+  const systemPromptCosts = sessions
+    .map((s) => s.contextSnapshot?.systemPromptTokens ?? 0)
+    .filter((t) => t > 0)
+    .sort((a, b) => a - b);
+  const medianSystemPromptTokens =
+    systemPromptCosts.length > 0
+      ? systemPromptCosts[Math.floor(systemPromptCosts.length / 2)]
+      : null;
+
+  // Use the most commonly seen model across snapshots to determine window size
+  const modelCounts = new Map<string, number>();
+  for (const s of sessions) {
+    const model = s.contextSnapshot?.model;
+    if (model) modelCounts.set(model, (modelCounts.get(model) ?? 0) + 1);
+  }
+  const typicalModel = [...modelCounts.entries()].sort(([, a], [, b]) => b - a)[0]?.[0];
+  const windowSize = modelContextWindow(typicalModel);
+
+  if (totalActive > 0 || availableFromPlugins.length > 0 || medianSystemPromptTokens !== null) {
+    section("Context Load  (session-start overhead)");
+
+    if (medianSystemPromptTokens !== null) {
+      const label = systemPromptSizeLabel(medianSystemPromptTokens, windowSize);
+      const colour = labelColour(label);
+      const windowNote = windowSize != null
+        ? `${Math.round((medianSystemPromptTokens / windowSize) * 100)}% of ${formatNumber(windowSize)} window`
+        : "";
+      console.log(
+        `  System prompt (typical)  ${bold(formatNumber(medianSystemPromptTokens))} tokens  ${colour(`[${label}]`)}${windowNote ? `  ${dim(windowNote)}` : ""}`,
+      );
+    }
 
     const staleList = activeGlobal.filter(isStale);
     const scopeBreakdown =
@@ -178,11 +225,11 @@ export async function statusCommand(): Promise<void> {
         ? `${activeGlobal.length} global, ${activeProject.length} project-scoped`
         : `${activeGlobal.length} global`;
 
-    console.log(`  Active servers    ${bold(String(totalActive))}  ${dim(`(${scopeBreakdown})`)}`);
+    console.log(`  Active MCP servers       ${bold(String(totalActive))}  ${dim(`(${scopeBreakdown})`)}`);
 
     if (totalActive > 5) {
       console.log(
-        `\n  ${yellow("⚑")}  ${bold(String(totalActive))} active MCP servers — each loads tool definitions into context at session start`,
+        `  ${yellow("⚑")}  ${bold(String(totalActive))} active MCP servers — each loads tool definitions into context at session start`,
       );
     }
 
@@ -194,14 +241,20 @@ export async function statusCommand(): Promise<void> {
     }
 
     const globalNames = activeGlobal.map((s) => s.name).join(", ");
-    if (globalNames) console.log(`  ${dim("global:")}   ${dim(globalNames)}`);
+    if (globalNames) console.log(`  ${dim("global:")}    ${dim(globalNames)}`);
 
     const projectNames = activeProject.map((s) => s.name).join(", ");
-    if (projectNames) console.log(`  ${dim("project:")}  ${projectNames}`);
+    if (projectNames) console.log(`  ${dim("project:")}   ${projectNames}`);
 
     if (availableFromPlugins.length > 0) {
       const availableNames = availableFromPlugins.map((s) => s.name).join(", ");
       console.log(`  ${dim("available (not enabled):")}  ${dim(availableNames)}`);
+    }
+
+    if (medianSystemPromptTokens !== null) {
+      console.log(
+        `\n  ${dim("Tip: run")} ${bold("/context")} ${dim("in a fresh Claude Code session to see the live system prompt breakdown.")}`,
+      );
     }
   }
 

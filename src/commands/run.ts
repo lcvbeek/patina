@@ -104,6 +104,7 @@ export interface SynthesisResponse {
 
 import { loadQuestions } from "../lib/questions.js";
 import { readGlobalMcpServers, readProjectMcpServers, mcpSummaryText } from "../lib/mcp.js";
+import { modelContextWindow, systemPromptSizeLabel } from "../lib/context-snapshot.js";
 
 // ---------------------------------------------------------------------------
 // Context loading
@@ -207,6 +208,68 @@ function formatReflectionsForPrompt(
     .join("\n\n---\n\n");
 }
 
+/**
+ * Build a ## Context Load section summarising session-start overhead across sessions.
+ * Uses contextSnapshot data extracted from JSONL attachments and first-turn usage.
+ * Returns null if no sessions have context snapshot data.
+ */
+function buildContextLoadSection(sessions: SessionSummary[]): string | null {
+  const sessionsWithSnapshot = sessions.filter((s) => s.contextSnapshot != null);
+  if (sessionsWithSnapshot.length === 0) return null;
+
+  // Aggregate system prompt tokens (use median to avoid outliers from cache hits)
+  const systemPromptCosts = sessionsWithSnapshot
+    .map((s) => s.contextSnapshot!.systemPromptTokens)
+    .filter((t) => t > 0)
+    .sort((a, b) => a - b);
+
+  const typicalSystemPromptTokens =
+    systemPromptCosts.length > 0
+      ? systemPromptCosts[Math.floor(systemPromptCosts.length / 2)]
+      : 0;
+
+  // Derive window size from the most commonly seen model across snapshots
+  const modelCounts = new Map<string, number>();
+  for (const s of sessionsWithSnapshot) {
+    const model = s.contextSnapshot!.model;
+    if (model) modelCounts.set(model, (modelCounts.get(model) ?? 0) + 1);
+  }
+  const typicalModel = [...modelCounts.entries()].sort(([, a], [, b]) => b - a)[0]?.[0];
+  const windowSize = modelContextWindow(typicalModel);
+
+  const labelText = typicalSystemPromptTokens > 0
+    ? systemPromptSizeLabel(typicalSystemPromptTokens, windowSize)
+    : null;
+
+  // Collect unique MCP server names across all sessions
+  const mcpCounts = new Map<string, number>();
+  for (const s of sessionsWithSnapshot) {
+    for (const name of s.contextSnapshot!.mcpServers) {
+      mcpCounts.set(name, (mcpCounts.get(name) ?? 0) + 1);
+    }
+  }
+  const mcpByFreq = [...mcpCounts.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .map(([name, count]) => (count > 1 ? `${name} (${count} sessions)` : name));
+
+  const lines: string[] = [`Sessions with context data: ${sessionsWithSnapshot.length}`];
+
+  if (typicalSystemPromptTokens > 0 && labelText) {
+    const windowNote = windowSize != null
+      ? ` (${Math.round((typicalSystemPromptTokens / windowSize) * 100)}% of ${formatNumber(windowSize)} window)`
+      : "";
+    lines.push(
+      `Typical system prompt size: ~${formatNumber(typicalSystemPromptTokens)} tokens [${labelText}]${windowNote}`,
+    );
+  }
+
+  if (mcpByFreq.length > 0) {
+    lines.push(`MCP servers active: ${mcpByFreq.join(", ")}`);
+  }
+
+  return `## Context Load (session-start overhead)\n${lines.join("\n")}`;
+}
+
 export function buildSynthesisPrompt(params: {
   cycleStart: string;
   cycleEnd: string;
@@ -267,6 +330,8 @@ export function buildSynthesisPrompt(params: {
 
   const mcpSummary = mcpSummaryText(readGlobalMcpServers(), readProjectMcpServers(cwd));
 
+  const contextLoadSection = buildContextLoadSection(sessions);
+
   return `## Cycle Overview
 Date range: ${cycleStart} → ${cycleEnd}
 ${lastCycleDate ? `Previous cycle: ${lastCycleDate}` : "First cycle (no previous baseline)"}
@@ -282,7 +347,7 @@ ${sessionTable}
 
 ## Reflection Answers
 ${reflectionLines}
-${capturesSection ? `\n## Notable Moments Captured This Cycle\n${capturesSection}` : ""}${mcpSummary ? `\n${mcpSummary}\n` : ""}
+${capturesSection ? `\n## Notable Moments Captured This Cycle\n${capturesSection}` : ""}${contextLoadSection ? `\n${contextLoadSection}\n` : ""}${mcpSummary ? `\n${mcpSummary}\n` : ""}
 ## Current Living Doc (AI Operating Constitution)
 \`\`\`
 ${livingDoc}

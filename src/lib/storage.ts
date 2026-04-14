@@ -219,6 +219,24 @@ export const SessionSummarySchema = z.object({
   ingested_at: z.string(), // ISO-8601
   author: z.string().optional(), // git config user.name at ingest time
   projectAlias: z.string().optional(), // path.basename(cwd) — consistent across machines
+  /** Real API token counts from JSONL usage fields. Optional for backward compat. */
+  actualTokens: z
+    .object({
+      input: z.number().int().nonnegative(),
+      output: z.number().int().nonnegative(),
+      cacheCreation: z.number().int().nonnegative(),
+      cacheRead: z.number().int().nonnegative(),
+    })
+    .optional(),
+  /** Context loaded at session start. Optional for backward compat. */
+  contextSnapshot: z
+    .object({
+      systemPromptTokens: z.number().int().nonnegative(),
+      mcpServers: z.array(z.string()),
+      deferredTools: z.array(z.string()),
+      model: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type SessionSummary = z.infer<typeof SessionSummarySchema>;

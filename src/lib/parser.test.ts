@@ -287,13 +287,92 @@ describe("parseConversationFile", () => {
     expect(sessions[0].session_id).toBe("ok");
   });
 
-  it("estimates tokens as ceil(char_count / 4)", () => {
-    // 40 chars of content → 10 tokens
-    const content = "a".repeat(40);
+  it("estimates tokens as ceil(char_count / 4.5) matching Anthropic's heuristic", () => {
+    // 45 chars of content → 10 tokens
+    const content = "a".repeat(45);
     const file = writeTmp([
       { type: "message", sessionId: "s1", message: { role: "user", content } },
     ]);
     const [session] = parseConversationFile(file, "proj");
-    expect(session.estimated_tokens).toBe(Math.ceil(40 / 4));
+    expect(session.estimated_tokens).toBe(Math.ceil(45 / 4.5));
+  });
+
+  it("accumulates real API token usage from assistant messages", () => {
+    const file = writeTmp([
+      {
+        type: "message",
+        sessionId: "s1",
+        message: {
+          role: "assistant",
+          content: [],
+          usage: {
+            input_tokens: 100,
+            output_tokens: 50,
+            cache_creation_input_tokens: 5000,
+            cache_read_input_tokens: 20000,
+          },
+        },
+      },
+      {
+        type: "message",
+        sessionId: "s1",
+        message: {
+          role: "assistant",
+          content: [],
+          usage: {
+            input_tokens: 200,
+            output_tokens: 80,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 25000,
+          },
+        },
+      },
+    ]);
+    const [session] = parseConversationFile(file, "proj");
+    expect(session.actualTokens).toEqual({
+      input: 300,
+      output: 130,
+      cacheCreation: 5000,
+      cacheRead: 45000,
+    });
+  });
+
+  it("leaves actualTokens undefined when no usage fields are present", () => {
+    const file = writeTmp([
+      { type: "message", sessionId: "s1", message: { role: "user", content: "hi" } },
+      { type: "message", sessionId: "s1", message: { role: "assistant", content: "ok" } },
+    ]);
+    const [session] = parseConversationFile(file, "proj");
+    expect(session.actualTokens).toBeUndefined();
+  });
+
+  it("attaches contextSnapshot when MCP and usage data are present", () => {
+    const file = writeTmp([
+      {
+        type: "attachment",
+        attachment: {
+          type: "mcp_instructions_delta",
+          addedNames: ["computer-use"],
+        },
+      },
+      {
+        type: "message",
+        sessionId: "s1",
+        message: {
+          role: "assistant",
+          content: [],
+          usage: {
+            input_tokens: 3,
+            cache_creation_input_tokens: 30000,
+            cache_read_input_tokens: 0,
+            output_tokens: 0,
+          },
+        },
+      },
+    ]);
+    const [session] = parseConversationFile(file, "proj");
+    expect(session.contextSnapshot).toBeDefined();
+    expect(session.contextSnapshot!.mcpServers).toEqual(["computer-use"]);
+    expect(session.contextSnapshot!.systemPromptTokens).toBe(30000);
   });
 });

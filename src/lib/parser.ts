@@ -3,6 +3,7 @@ import os from "os";
 import path from "path";
 import { z } from "zod";
 import type { SessionSummary } from "./storage.js";
+import { extractContextSnapshot, type ContextSnapshot } from "./context-snapshot.js";
 
 // ---------------------------------------------------------------------------
 // Claude Code JSONL message schema (permissive — we only extract what we need)
@@ -32,6 +33,14 @@ const MessageEntrySchema = z.object({
             ]),
           ),
         ])
+        .optional(),
+      usage: z
+        .object({
+          input_tokens: z.number().optional(),
+          output_tokens: z.number().optional(),
+          cache_creation_input_tokens: z.number().optional(),
+          cache_read_input_tokens: z.number().optional(),
+        })
         .optional(),
     })
     .optional(),
@@ -145,6 +154,15 @@ export interface ParsedSession {
   estimated_tokens: number;
   tool_calls: Record<string, number>;
   had_rework: boolean;
+  /** Real API token counts from JSONL usage fields (undefined for pre-usage sessions). */
+  actualTokens?: {
+    input: number;
+    output: number;
+    cacheCreation: number;
+    cacheRead: number;
+  };
+  /** Context loaded at session start: system prompt size, MCP servers, deferred tools. */
+  contextSnapshot?: ContextSnapshot;
 }
 
 /**
@@ -180,12 +198,20 @@ export function parseConversationFile(filePath: string, projectName: string): Pa
 
   const sessions: ParsedSession[] = [];
 
+  // Extract context snapshot once for the whole file (session-start data)
+  const contextSnapshot = extractContextSnapshot(filePath);
+
   for (const [session_id, sessionEntries] of bySession) {
     let turn_count = 0;
     let char_count = 0;
     const tool_calls: Record<string, number> = {};
     let had_rework = false;
     let earliest_timestamp = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cacheCreationTokens = 0;
+    let cacheReadTokens = 0;
+    let hasRealUsage = false;
 
     for (const entry of sessionEntries) {
       // Count message turns
@@ -211,6 +237,16 @@ export function parseConversationFile(filePath: string, projectName: string): Pa
             tool_calls[name] = (tool_calls[name] ?? 0) + 1;
           }
         }
+
+        // Accumulate real API token usage
+        const usage = entry.message.usage;
+        if (usage) {
+          inputTokens += usage.input_tokens ?? 0;
+          outputTokens += usage.output_tokens ?? 0;
+          cacheCreationTokens += usage.cache_creation_input_tokens ?? 0;
+          cacheReadTokens += usage.cache_read_input_tokens ?? 0;
+          hasRealUsage = true;
+        }
       }
 
       // Track earliest timestamp for the session
@@ -219,14 +255,27 @@ export function parseConversationFile(filePath: string, projectName: string): Pa
       }
     }
 
+    const actualTokens = hasRealUsage
+      ? {
+          input: inputTokens,
+          output: outputTokens,
+          cacheCreation: cacheCreationTokens,
+          cacheRead: cacheReadTokens,
+        }
+      : undefined;
+
     sessions.push({
       session_id,
       project: projectName,
       timestamp: earliest_timestamp || new Date().toISOString(),
       turn_count,
-      estimated_tokens: Math.ceil(char_count / 4),
+      estimated_tokens: Math.ceil(char_count / 4.5),
       tool_calls,
       had_rework,
+      actualTokens,
+      contextSnapshot: contextSnapshot.mcpServers.length > 0 || contextSnapshot.systemPromptTokens > 0
+        ? contextSnapshot
+        : undefined,
     });
   }
 
