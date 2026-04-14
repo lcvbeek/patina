@@ -1,7 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import os from "os";
-import path from "path";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mock external dependencies before importing the module under test
@@ -44,19 +41,6 @@ import { getGitAuthor } from "../lib/git.js";
 import type { SessionSummary } from "../lib/storage.js";
 
 // ---------------------------------------------------------------------------
-// Type aliases for mocks
-// ---------------------------------------------------------------------------
-
-const mockAssertInitialised = assertInitialised as ReturnType<typeof vi.fn>;
-const mockSessionExists = sessionExists as ReturnType<typeof vi.fn>;
-const mockWriteSession = writeSession as ReturnType<typeof vi.fn>;
-const mockReadConfig = readConfig as ReturnType<typeof vi.fn>;
-const mockDiscoverProjects = discoverProjects as ReturnType<typeof vi.fn>;
-const mockParseConversationFile = parseConversationFile as ReturnType<typeof vi.fn>;
-const mockCwdToSlug = cwdToSlug as ReturnType<typeof vi.fn>;
-const mockGetGitAuthor = getGitAuthor as ReturnType<typeof vi.fn>;
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -77,15 +61,11 @@ function makeParsedSession(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockReadConfig.mockReturnValue({ include: [], exclude: [] });
-  mockCwdToSlug.mockReturnValue("-Users-test-project");
-  mockGetGitAuthor.mockReturnValue("Leo");
-  mockAssertInitialised.mockReturnValue(undefined);
-  mockWriteSession.mockReturnValue(undefined);
-});
-
-afterEach(() => {
-  vi.clearAllMocks();
+  vi.mocked(readConfig).mockReturnValue({ include: [], exclude: [] });
+  vi.mocked(cwdToSlug).mockReturnValue("-Users-test-project");
+  vi.mocked(getGitAuthor).mockReturnValue("Leo");
+  vi.mocked(assertInitialised).mockReturnValue(undefined);
+  vi.mocked(writeSession).mockReturnValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -94,17 +74,17 @@ afterEach(() => {
 
 describe("runIngest", () => {
   it("returns zero counts when no projects are discovered", () => {
-    mockDiscoverProjects.mockReturnValue([]);
+    vi.mocked(discoverProjects).mockReturnValue([]);
     const result = runIngest();
     expect(result).toEqual({ ingested: 0, skipped: 0, errors: 0 });
   });
 
   it("ingests a new session and returns ingested count of 1", () => {
-    mockDiscoverProjects.mockReturnValue([
+    vi.mocked(discoverProjects).mockReturnValue([
       { name: "test-project", conversationFile: "/fake/path.jsonl" },
     ]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(false);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(false);
 
     const result = runIngest();
 
@@ -114,11 +94,11 @@ describe("runIngest", () => {
   });
 
   it("skips sessions that already exist on disk", () => {
-    mockDiscoverProjects.mockReturnValue([
+    vi.mocked(discoverProjects).mockReturnValue([
       { name: "test-project", conversationFile: "/fake/path.jsonl" },
     ]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(true);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(true);
 
     const result = runIngest();
 
@@ -128,10 +108,10 @@ describe("runIngest", () => {
   });
 
   it("increments errors when parseConversationFile throws", () => {
-    mockDiscoverProjects.mockReturnValue([
+    vi.mocked(discoverProjects).mockReturnValue([
       { name: "bad-project", conversationFile: "/bad/path.jsonl" },
     ]);
-    mockParseConversationFile.mockImplementation(() => {
+    vi.mocked(parseConversationFile).mockImplementation(() => {
       throw new Error("ENOENT: file not found");
     });
 
@@ -142,10 +122,12 @@ describe("runIngest", () => {
   });
 
   it("increments errors when writeSession throws", () => {
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(false);
-    mockWriteSession.mockImplementation(() => {
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(false);
+    vi.mocked(writeSession).mockImplementation(() => {
       throw new Error("disk full");
     });
 
@@ -156,27 +138,29 @@ describe("runIngest", () => {
   });
 
   it("handles multiple sessions from one project file", () => {
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([
       makeParsedSession({ session_id: "s1" }),
       makeParsedSession({ session_id: "s2" }),
       makeParsedSession({ session_id: "s3" }),
     ]);
-    mockSessionExists.mockReturnValue(false);
+    vi.mocked(sessionExists).mockReturnValue(false);
 
     const result = runIngest();
 
     expect(result.ingested).toBe(3);
-    expect(mockWriteSession).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(writeSession)).toHaveBeenCalledTimes(3);
   });
 
   it("mixes ingested, skipped, and errored sessions in one pass", () => {
-    mockDiscoverProjects.mockReturnValue([
+    vi.mocked(discoverProjects).mockReturnValue([
       { name: "proj-a", conversationFile: "/a.jsonl" },
       { name: "proj-b", conversationFile: "/b.jsonl" },
     ]);
 
-    mockParseConversationFile
+    vi.mocked(parseConversationFile)
       .mockReturnValueOnce([
         makeParsedSession({ session_id: "new-1" }),
         makeParsedSession({ session_id: "dup-1" }),
@@ -185,7 +169,7 @@ describe("runIngest", () => {
         throw new Error("parse failure");
       });
 
-    mockSessionExists.mockImplementation((id: string) => id === "dup-1");
+    vi.mocked(sessionExists).mockImplementation((id: string) => id === "dup-1");
 
     const result = runIngest();
 
@@ -195,12 +179,12 @@ describe("runIngest", () => {
   });
 
   it("passes includeSlugs and excludeSlugs from config to discoverProjects", () => {
-    mockReadConfig.mockReturnValue({ include: ["extra-project"], exclude: ["excluded"] });
-    mockDiscoverProjects.mockReturnValue([]);
+    vi.mocked(readConfig).mockReturnValue({ include: ["extra-project"], exclude: ["excluded"] });
+    vi.mocked(discoverProjects).mockReturnValue([]);
 
     runIngest();
 
-    expect(mockDiscoverProjects).toHaveBeenCalledWith(
+    expect(vi.mocked(discoverProjects)).toHaveBeenCalledWith(
       undefined,
       expect.arrayContaining(["extra-project"]),
       expect.arrayContaining(["excluded"]),
@@ -208,11 +192,11 @@ describe("runIngest", () => {
   });
 
   it("uses the custom claudeDir when provided", () => {
-    mockDiscoverProjects.mockReturnValue([]);
+    vi.mocked(discoverProjects).mockReturnValue([]);
 
     runIngest({ claudeDir: "/custom/claude/dir" });
 
-    expect(mockDiscoverProjects).toHaveBeenCalledWith(
+    expect(vi.mocked(discoverProjects)).toHaveBeenCalledWith(
       "/custom/claude/dir",
       expect.any(Array),
       expect.any(Array),
@@ -220,14 +204,16 @@ describe("runIngest", () => {
   });
 
   it("calls writeSession with ingested_at and author metadata", () => {
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(false);
-    mockGetGitAuthor.mockReturnValue("Test Author");
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(false);
+    vi.mocked(getGitAuthor).mockReturnValue("Test Author");
 
     runIngest();
 
-    const callArgs = mockWriteSession.mock.calls[0][0] as SessionSummary;
+    const callArgs = vi.mocked(writeSession).mock.calls[0][0] as SessionSummary;
     expect(callArgs.ingested_at).toBeTruthy();
     expect(callArgs.author).toBe("Test Author");
     expect(callArgs.projectAlias).toBeTruthy();
@@ -235,9 +221,11 @@ describe("runIngest", () => {
 
   it("logs verbose output when verbose option is true", () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(false);
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(false);
 
     runIngest({ verbose: true });
 
@@ -247,7 +235,7 @@ describe("runIngest", () => {
 
   it("does not log when verbose is false", () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([]);
+    vi.mocked(discoverProjects).mockReturnValue([]);
 
     runIngest({ verbose: false });
 
@@ -262,14 +250,14 @@ describe("runIngest", () => {
 
 describe("ingestCommand", () => {
   it("calls assertInitialised before doing anything else", async () => {
-    mockDiscoverProjects.mockReturnValue([]);
+    vi.mocked(discoverProjects).mockReturnValue([]);
     await ingestCommand();
-    expect(mockAssertInitialised).toHaveBeenCalledOnce();
+    expect(vi.mocked(assertInitialised)).toHaveBeenCalledOnce();
   });
 
   it("logs a message when no projects are found", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([]);
+    vi.mocked(discoverProjects).mockReturnValue([]);
 
     await ingestCommand();
 
@@ -278,20 +266,22 @@ describe("ingestCommand", () => {
   });
 
   it("returns without ingesting when projects list is empty", async () => {
-    mockDiscoverProjects.mockReturnValue([]);
+    vi.mocked(discoverProjects).mockReturnValue([]);
     await ingestCommand();
-    expect(mockWriteSession).not.toHaveBeenCalled();
+    expect(vi.mocked(writeSession)).not.toHaveBeenCalled();
   });
 
   it("ingests a new session and prints a done summary", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(false);
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(false);
 
     await ingestCommand();
 
-    expect(mockWriteSession).toHaveBeenCalledOnce();
+    expect(vi.mocked(writeSession)).toHaveBeenCalledOnce();
     const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
     expect(allLogs).toContain("Done.");
     expect(allLogs).toContain("1 session(s) ingested");
@@ -300,13 +290,15 @@ describe("ingestCommand", () => {
 
   it("skips duplicate sessions and reports them in the summary", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(true);
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(true);
 
     await ingestCommand();
 
-    expect(mockWriteSession).not.toHaveBeenCalled();
+    expect(vi.mocked(writeSession)).not.toHaveBeenCalled();
     const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
     expect(allLogs).toContain("1 skipped");
     consoleSpy.mockRestore();
@@ -315,8 +307,8 @@ describe("ingestCommand", () => {
   it("reports parse errors in the summary when they occur", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([{ name: "bad", conversationFile: "/bad.jsonl" }]);
-    mockParseConversationFile.mockImplementation(() => {
+    vi.mocked(discoverProjects).mockReturnValue([{ name: "bad", conversationFile: "/bad.jsonl" }]);
+    vi.mocked(parseConversationFile).mockImplementation(() => {
       throw new Error("parse error");
     });
 
@@ -330,9 +322,11 @@ describe("ingestCommand", () => {
 
   it("does not print the status prompt when nothing was ingested", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(true); // all skipped
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(true); // all skipped
 
     await ingestCommand();
 
@@ -343,9 +337,11 @@ describe("ingestCommand", () => {
 
   it("prints the status prompt when sessions were ingested", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(false);
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(false);
 
     await ingestCommand();
 
@@ -355,11 +351,11 @@ describe("ingestCommand", () => {
   });
 
   it("uses custom claudeDir when passed as option", async () => {
-    mockDiscoverProjects.mockReturnValue([]);
+    vi.mocked(discoverProjects).mockReturnValue([]);
 
     await ingestCommand({ claudeDir: "/custom/dir" });
 
-    expect(mockDiscoverProjects).toHaveBeenCalledWith(
+    expect(vi.mocked(discoverProjects)).toHaveBeenCalledWith(
       "/custom/dir",
       expect.any(Array),
       expect.any(Array),
@@ -368,9 +364,11 @@ describe("ingestCommand", () => {
 
   it("prints verbose file-by-file output when verbose is true", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    mockDiscoverProjects.mockReturnValue([{ name: "proj", conversationFile: "/fake.jsonl" }]);
-    mockParseConversationFile.mockReturnValue([makeParsedSession()]);
-    mockSessionExists.mockReturnValue(false);
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(false);
 
     await ingestCommand({ verbose: true });
 

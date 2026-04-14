@@ -70,17 +70,6 @@ import { writeCycleFile, ensureSpokeFiles } from "../lib/storage.js";
 import fs from "fs";
 
 // ---------------------------------------------------------------------------
-// Type aliases for mocks
-// ---------------------------------------------------------------------------
-
-const mockCallClaudeForJson = callClaudeForJson as ReturnType<typeof vi.fn>;
-const mockWriteCycleFile = writeCycleFile as ReturnType<typeof vi.fn>;
-const mockEnsureSpokeFiles = ensureSpokeFiles as ReturnType<typeof vi.fn>;
-const mockFsExistsSync = fs.existsSync as ReturnType<typeof vi.fn>;
-const mockFsReadFileSync = fs.readFileSync as ReturnType<typeof vi.fn>;
-const mockFsWriteFileSync = fs.writeFileSync as ReturnType<typeof vi.fn>;
-
-// ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
@@ -138,15 +127,15 @@ Some autonomy content.
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockWriteCycleFile.mockReturnValue(undefined);
-  mockEnsureSpokeFiles.mockReturnValue(undefined);
-  mockFsExistsSync.mockReturnValue(true);
-  mockFsReadFileSync.mockReturnValue("# file content\n\n| Header |\n|---|\n| old row |");
-  mockFsWriteFileSync.mockReturnValue(undefined);
+  vi.mocked(writeCycleFile).mockReturnValue(undefined);
+  vi.mocked(ensureSpokeFiles).mockReturnValue(undefined);
+  vi.mocked(fs.existsSync).mockReturnValue(true);
+  vi.mocked(fs.readFileSync).mockReturnValue("# file content\n\n| Header |\n|---|\n| old row |");
+  vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -364,60 +353,56 @@ describe("replaceTableBody", () => {
 describe("applyOnboardingToSpokes", () => {
   it("calls ensureSpokeFiles to guarantee directories exist", () => {
     applyOnboardingToSpokes("/test/cwd", MOCK_RESPONSE);
-    expect(mockEnsureSpokeFiles).toHaveBeenCalledWith("/test/cwd");
+    expect(vi.mocked(ensureSpokeFiles)).toHaveBeenCalledWith("/test/cwd");
   });
 
   it("reads the autonomy-detail file", () => {
     applyOnboardingToSpokes("/test/cwd", MOCK_RESPONSE);
-    const readCalls = (mockFsReadFileSync as ReturnType<typeof vi.fn>).mock.calls.map(
-      (c) => c[0] as string,
-    );
+    const readCalls = vi.mocked(fs.readFileSync).mock.calls.map((c) => c[0] as string);
     expect(readCalls.some((p) => p.includes("autonomy-detail"))).toBe(true);
   });
 
   it("reads the eval-framework file", () => {
     applyOnboardingToSpokes("/test/cwd", MOCK_RESPONSE);
-    const readCalls = (mockFsReadFileSync as ReturnType<typeof vi.fn>).mock.calls.map(
-      (c) => c[0] as string,
-    );
+    const readCalls = vi.mocked(fs.readFileSync).mock.calls.map((c) => c[0] as string);
     expect(readCalls.some((p) => p.includes("eval-framework"))).toBe(true);
   });
 
   it("writes the autonomy-detail file with new rows", () => {
     applyOnboardingToSpokes("/test/cwd", MOCK_RESPONSE);
-    const writeCalls = mockFsWriteFileSync.mock.calls.map((c) => c[0] as string);
+    const writeCalls = vi.mocked(fs.writeFileSync).mock.calls.map((c) => c[0] as string);
     expect(writeCalls.some((p) => p.includes("autonomy-detail"))).toBe(true);
   });
 
   it("writes the eval-framework file with new rows", () => {
     applyOnboardingToSpokes("/test/cwd", MOCK_RESPONSE);
-    const writeCalls = mockFsWriteFileSync.mock.calls.map((c) => c[0] as string);
+    const writeCalls = vi.mocked(fs.writeFileSync).mock.calls.map((c) => c[0] as string);
     expect(writeCalls.some((p) => p.includes("eval-framework"))).toBe(true);
   });
 
   it("autonomy-detail written content contains the new rows", () => {
-    mockFsReadFileSync.mockReturnValue("| H |\n|---|\n| old |");
+    vi.mocked(fs.readFileSync).mockReturnValue("| H |\n|---|\n| old |");
     applyOnboardingToSpokes("/test/cwd", MOCK_RESPONSE);
-    const autonomyWrite = mockFsWriteFileSync.mock.calls.find((c) =>
-      (c[0] as string).includes("autonomy-detail"),
-    );
+    const autonomyWrite = vi
+      .mocked(fs.writeFileSync)
+      .mock.calls.find((c) => (c[0] as string).includes("autonomy-detail"));
     expect(autonomyWrite).toBeDefined();
     expect(autonomyWrite![1] as string).toContain("Single-file edit");
   });
 
   it("eval-framework written content contains the new rows", () => {
-    mockFsReadFileSync.mockReturnValue("| H |\n|---|\n| old |");
+    vi.mocked(fs.readFileSync).mockReturnValue("| H |\n|---|\n| old |");
     applyOnboardingToSpokes("/test/cwd", MOCK_RESPONSE);
-    const evalWrite = mockFsWriteFileSync.mock.calls.find((c) =>
-      (c[0] as string).includes("eval-framework"),
-    );
+    const evalWrite = vi
+      .mocked(fs.writeFileSync)
+      .mock.calls.find((c) => (c[0] as string).includes("eval-framework"));
     expect(evalWrite).toBeDefined();
     expect(evalWrite![1] as string).toContain("Code change");
   });
 
   it("writes files with utf-8 encoding", () => {
     applyOnboardingToSpokes("/test/cwd", MOCK_RESPONSE);
-    for (const call of mockFsWriteFileSync.mock.calls) {
+    for (const call of vi.mocked(fs.writeFileSync).mock.calls) {
       expect(call[2]).toBe("utf-8");
     }
   });
@@ -450,17 +435,17 @@ describe("onboardCommand", () => {
   const CWD = "/test/cwd";
 
   beforeEach(() => {
-    mockCallClaudeForJson.mockResolvedValue(MOCK_RESPONSE);
-    mockFsExistsSync.mockReturnValue(true);
-    mockFsReadFileSync.mockReturnValue(TEMPLATE_DOC);
-    mockFsWriteFileSync.mockReturnValue(undefined);
+    vi.mocked(callClaudeForJson).mockResolvedValue(MOCK_RESPONSE);
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(TEMPLATE_DOC);
+    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
     setupReadlineAnswers("y");
   });
 
   it("calls Claude with a prompt built from answers", async () => {
     await onboardCommand(CWD);
-    expect(mockCallClaudeForJson).toHaveBeenCalledOnce();
-    const prompt = mockCallClaudeForJson.mock.calls[0][0] as string;
+    expect(vi.mocked(callClaudeForJson)).toHaveBeenCalledOnce();
+    const prompt = vi.mocked(callClaudeForJson).mock.calls[0][0] as string;
     expect(prompt).toContain("test answer");
   });
 
@@ -477,39 +462,39 @@ describe("onboardCommand", () => {
 
   it("writes PATINA.md when confirmed with 'y'", async () => {
     await onboardCommand(CWD);
-    const writes = mockFsWriteFileSync.mock.calls.map((c) => c[0] as string);
+    const writes = vi.mocked(fs.writeFileSync).mock.calls.map((c) => c[0] as string);
     expect(writes.some((p) => p.includes("PATINA.md"))).toBe(true);
   });
 
   it("written PATINA.md content includes new behavior contract", async () => {
     await onboardCommand(CWD);
-    const patinaWrite = mockFsWriteFileSync.mock.calls.find((c) =>
-      (c[0] as string).includes("PATINA.md"),
-    );
+    const patinaWrite = vi
+      .mocked(fs.writeFileSync)
+      .mock.calls.find((c) => (c[0] as string).includes("PATINA.md"));
     expect(patinaWrite).toBeDefined();
     expect(patinaWrite![1] as string).toContain("Confirm plan first");
   });
 
   it("saves a cycle file after confirming", async () => {
     await onboardCommand(CWD);
-    expect(mockWriteCycleFile).toHaveBeenCalledOnce();
+    expect(vi.mocked(writeCycleFile)).toHaveBeenCalledOnce();
   });
 
   it("cycle file content contains the summary from Claude", async () => {
     await onboardCommand(CWD);
-    const cycleContent = mockWriteCycleFile.mock.calls[0][1] as string;
+    const cycleContent = vi.mocked(writeCycleFile).mock.calls[0][1] as string;
     expect(cycleContent).toContain("Established initial agreements.");
   });
 
   it("cycle file content contains behavior contract", async () => {
     await onboardCommand(CWD);
-    const cycleContent = mockWriteCycleFile.mock.calls[0][1] as string;
+    const cycleContent = vi.mocked(writeCycleFile).mock.calls[0][1] as string;
     expect(cycleContent).toContain("Confirm plan first");
   });
 
   it("cycle file content contains autonomy rows", async () => {
     await onboardCommand(CWD);
-    const cycleContent = mockWriteCycleFile.mock.calls[0][1] as string;
+    const cycleContent = vi.mocked(writeCycleFile).mock.calls[0][1] as string;
     expect(cycleContent).toContain("Single-file edit");
   });
 
@@ -518,7 +503,6 @@ describe("onboardCommand", () => {
     await onboardCommand(CWD);
     const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
     expect(allLogs).toContain("PATINA.md");
-    consoleSpy.mockRestore();
   });
 
   it("logs the cycles path after applying", async () => {
@@ -526,20 +510,19 @@ describe("onboardCommand", () => {
     await onboardCommand(CWD);
     const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
     expect(allLogs).toContain("cycles/");
-    consoleSpy.mockRestore();
   });
 
   it("aborts without writing when confirmed with 'N'", async () => {
     setupReadlineAnswers("N");
     await onboardCommand(CWD);
-    expect(mockFsWriteFileSync).not.toHaveBeenCalled();
-    expect(mockWriteCycleFile).not.toHaveBeenCalled();
+    expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalled();
+    expect(vi.mocked(writeCycleFile)).not.toHaveBeenCalled();
   });
 
   it("aborts without writing when confirm is empty (default no)", async () => {
     setupReadlineAnswers("");
     await onboardCommand(CWD);
-    expect(mockWriteCycleFile).not.toHaveBeenCalled();
+    expect(vi.mocked(writeCycleFile)).not.toHaveBeenCalled();
   });
 
   it("logs abort message when user declines", async () => {
@@ -548,7 +531,6 @@ describe("onboardCommand", () => {
     await onboardCommand(CWD);
     const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
     expect(allLogs).toContain("Aborted");
-    consoleSpy.mockRestore();
   });
 
   it("calls process.exit(1) when Claude call fails", async () => {
@@ -556,12 +538,10 @@ describe("onboardCommand", () => {
       throw new Error("process.exit called");
     }) as never);
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    mockCallClaudeForJson.mockRejectedValue(new Error("Claude CLI failed"));
+    vi.mocked(callClaudeForJson).mockRejectedValue(new Error("Claude CLI failed"));
 
     await expect(onboardCommand(CWD)).rejects.toThrow("process.exit called");
     expect(exitSpy).toHaveBeenCalledWith(1);
-    exitSpy.mockRestore();
-    errorSpy.mockRestore();
   });
 
   it("logs the Claude error message when call fails", async () => {
@@ -569,36 +549,32 @@ describe("onboardCommand", () => {
       throw new Error("exit");
     }) as never);
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    mockCallClaudeForJson.mockRejectedValue(new Error("network timeout"));
+    vi.mocked(callClaudeForJson).mockRejectedValue(new Error("network timeout"));
 
     await expect(onboardCommand(CWD)).rejects.toThrow();
     expect(errorSpy).toHaveBeenCalled();
     const msg = errorSpy.mock.calls[0][0] as string;
     expect(msg).toContain("network timeout");
-    errorSpy.mockRestore();
-    vi.restoreAllMocks();
   });
 
   it("calls process.exit(1) when PATINA.md does not exist", async () => {
-    mockFsExistsSync.mockReturnValue(false);
+    vi.mocked(fs.existsSync).mockReturnValue(false);
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
       throw new Error("process.exit called");
     }) as never);
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
 
     await expect(onboardCommand(CWD)).rejects.toThrow("process.exit called");
     expect(exitSpy).toHaveBeenCalledWith(1);
-    exitSpy.mockRestore();
-    errorSpy.mockRestore();
   });
 
   it("updates the last-updated timestamp in PATINA.md", async () => {
     const docWithDate = TEMPLATE_DOC + "\n> Last updated: 2024-01-01";
-    mockFsReadFileSync.mockReturnValue(docWithDate);
+    vi.mocked(fs.readFileSync).mockReturnValue(docWithDate);
     await onboardCommand(CWD);
-    const patinaWrite = mockFsWriteFileSync.mock.calls.find((c) =>
-      (c[0] as string).includes("PATINA.md"),
-    );
+    const patinaWrite = vi
+      .mocked(fs.writeFileSync)
+      .mock.calls.find((c) => (c[0] as string).includes("PATINA.md"));
     expect(patinaWrite).toBeDefined();
     const written = patinaWrite![1] as string;
     // The date should have been updated to today
@@ -607,6 +583,6 @@ describe("onboardCommand", () => {
 
   it("writes spoke files (autonomy and eval) during confirmed flow", async () => {
     await onboardCommand(CWD);
-    expect(mockEnsureSpokeFiles).toHaveBeenCalled();
+    expect(vi.mocked(ensureSpokeFiles)).toHaveBeenCalled();
   });
 });

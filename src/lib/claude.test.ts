@@ -69,9 +69,6 @@ describe("callViaCli (via callClaudeForText)", () => {
 
     // Default: CLI is available
     spawnSyncMock.mockReturnValue({ error: null, status: 0 });
-
-    // Reset module cache so claudeCliAvailableCache is cleared between tests
-    vi.resetModules();
   });
 
   afterEach(() => {
@@ -99,8 +96,8 @@ describe("callViaCli (via callClaudeForText)", () => {
     const { callClaudeForText } = await import("./claude.js");
     await callClaudeForText("my prompt text");
 
-    expect(child.stdin.write).toHaveBeenCalledWith("my prompt text", "utf8");
-    expect(child.stdin.end).toHaveBeenCalled();
+    expect(child.stdin!.write).toHaveBeenCalledWith("my prompt text", "utf8");
+    expect(child.stdin!.end).toHaveBeenCalled();
   });
 
   it("spawns claude with the expected arguments", async () => {
@@ -145,7 +142,7 @@ describe("callViaCli (via callClaudeForText)", () => {
     const child = makeChildProcess({ exitCode: 0 });
 
     // Override end to emit an 'error' event instead of close
-    child.stdin.end = vi.fn().mockImplementation(() => {
+    child.stdin!.end = vi.fn().mockImplementation(() => {
       setImmediate(() => child.emit("error", new Error("spawn ENOENT")));
       return child.stdin;
     });
@@ -262,32 +259,38 @@ describe("callClaude — no access path available", () => {
 // ---------------------------------------------------------------------------
 
 describe("ANALYST_PREAMBLE", () => {
-  it("is a non-empty string", async () => {
+  let ANALYST_PREAMBLE: string;
+
+  beforeEach(async () => {
     vi.resetModules();
-    const { ANALYST_PREAMBLE } = await import("./claude.js");
+    ({ ANALYST_PREAMBLE } = await import("./claude.js"));
+  });
+
+  it("is a non-empty string", () => {
     expect(typeof ANALYST_PREAMBLE).toBe("string");
     expect(ANALYST_PREAMBLE.length).toBeGreaterThan(0);
   });
 
-  it("references behavioral pattern analysis", async () => {
-    vi.resetModules();
-    const { ANALYST_PREAMBLE } = await import("./claude.js");
+  it("references behavioral pattern analysis", () => {
     expect(ANALYST_PREAMBLE).toContain("behavioral pattern");
   });
 });
 
 describe("patinaMdEditingRules", () => {
-  it("returns a string containing the provided line and char limits", async () => {
+  let patinaMdEditingRules: (maxLines: number, maxChars: number) => string;
+
+  beforeEach(async () => {
     vi.resetModules();
-    const { patinaMdEditingRules } = await import("./claude.js");
+    ({ patinaMdEditingRules } = await import("./claude.js"));
+  });
+
+  it("returns a string containing the provided line and char limits", () => {
     const rules = patinaMdEditingRules(80, 3200);
     expect(rules).toContain("80");
     expect(rules).toContain("3200");
   });
 
-  it("mentions the three diff action types", async () => {
-    vi.resetModules();
-    const { patinaMdEditingRules } = await import("./claude.js");
+  it("mentions the three diff action types", () => {
     const rules = patinaMdEditingRules(80, 3200);
     expect(rules).toContain('"add"');
     expect(rules).toContain('"replace"');

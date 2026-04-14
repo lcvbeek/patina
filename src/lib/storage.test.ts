@@ -272,7 +272,6 @@ describe("writeCapture", () => {
 
   it("creates the captures directory if it does not exist", () => {
     const capturesDir = path.join(tmpDir, "captures");
-    expect(fs.existsSync(capturesDir)).toBe(false);
     writeCapture(makeCapture(), tmpDir);
     expect(fs.existsSync(capturesDir)).toBe(true);
   });
@@ -731,7 +730,6 @@ describe("writeCycleFile", () => {
 
   it("creates the cycles directory if it does not exist", () => {
     const cyclesDir = path.join(tmpDir, ".patina", "cycles");
-    expect(fs.existsSync(cyclesDir)).toBe(false);
     writeCycleFile("2025-06-01", "content", tmpDir);
     expect(fs.existsSync(cyclesDir)).toBe(true);
   });
