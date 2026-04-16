@@ -361,6 +361,17 @@ export interface PatinaConfig {
    * Set to 0 to disable. Default: 10.
    */
   retroReminderAfterSessions?: number;
+  /**
+   * Controls fetching of Claude Code changelog for synthesis context.
+   */
+  capabilities?: {
+    /** Fetch and inject Claude Code capabilities into the synthesis prompt. Default: true. */
+    enabled?: boolean;
+    /** Cache TTL in hours. Default: 24. */
+    ttlHours?: number;
+    /** URL to fetch. Default: Claude Code GitHub CHANGELOG. */
+    url?: string;
+  };
 }
 
 const DEFAULT_CONFIG: PatinaConfig = {
