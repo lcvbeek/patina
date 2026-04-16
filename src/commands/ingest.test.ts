@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+let nextReadlineAnswer = "n";
+
+vi.mock("readline", () => ({
+  default: {
+    createInterface: vi.fn(() => ({
+      question: vi.fn((_q: string, cb: (a: string) => void) => cb(nextReadlineAnswer)),
+      close: vi.fn(),
+    })),
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Mock external dependencies before importing the module under test
 // ---------------------------------------------------------------------------
@@ -12,6 +23,8 @@ vi.mock("../lib/storage.js", async (importOriginal) => {
     sessionExists: vi.fn(),
     writeSession: vi.fn(),
     readConfig: vi.fn(),
+    readCaptures: vi.fn(),
+    getLatestCycleDate: vi.fn(),
   };
 });
 
@@ -30,15 +43,38 @@ vi.mock("../lib/git.js", async (importOriginal) => {
   return { ...actual, getGitAuthor: vi.fn() };
 });
 
+vi.mock("./capture.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./capture.js")>();
+  return { ...actual, captureCommand: vi.fn() };
+});
+
+vi.mock("../lib/capture-triggers.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/capture-triggers.js")>();
+  return {
+    ...actual,
+    suggestCaptureFromSessions: vi.fn(actual.suggestCaptureFromSessions),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks are registered)
 // ---------------------------------------------------------------------------
 
 import { runIngest, ingestCommand } from "./ingest.js";
-import { assertInitialised, sessionExists, writeSession, readConfig } from "../lib/storage.js";
+import * as ingestModule from "./ingest.js";
+import {
+  assertInitialised,
+  sessionExists,
+  writeSession,
+  readConfig,
+  readCaptures,
+  getLatestCycleDate,
+} from "../lib/storage.js";
 import { discoverProjects, parseConversationFile, cwdToSlug } from "../lib/parser.js";
 import { getGitAuthor } from "../lib/git.js";
 import type { SessionSummary } from "../lib/storage.js";
+import { captureCommand } from "./capture.js";
+import { suggestCaptureFromSessions } from "../lib/capture-triggers.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,6 +102,9 @@ beforeEach(() => {
   vi.mocked(getGitAuthor).mockReturnValue("Leo");
   vi.mocked(assertInitialised).mockReturnValue(undefined);
   vi.mocked(writeSession).mockReturnValue(undefined);
+  vi.mocked(readCaptures).mockReturnValue([]);
+  vi.mocked(getLatestCycleDate).mockReturnValue(null);
+  nextReadlineAnswer = "n";
 });
 
 // ---------------------------------------------------------------------------
@@ -375,5 +414,59 @@ describe("ingestCommand", () => {
     const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
     expect(allLogs).toContain("/fake.jsonl");
     consoleSpy.mockRestore();
+  });
+
+  it("prints a capture suggestion prompt (declined)", async () => {
+    const interactiveSpy = vi.spyOn(ingestModule.terminal, "isInteractive").mockReturnValue(true);
+
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([
+      makeParsedSession({ timestamp: new Date().toISOString() }),
+    ]);
+    vi.mocked(sessionExists).mockReturnValue(false);
+    vi.mocked(suggestCaptureFromSessions).mockReturnValue({
+      tag: "frustration",
+      reason: "Rework detected in a newly ingested session.",
+    });
+    nextReadlineAnswer = "n";
+
+    try {
+      await ingestCommand();
+
+      const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
+      expect(allLogs).toContain("Capture suggestion:");
+      expect(vi.mocked(captureCommand)).not.toHaveBeenCalled();
+    } finally {
+      consoleSpy.mockRestore();
+      interactiveSpy.mockRestore();
+    }
+  });
+
+  it("runs capture when the suggestion prompt is accepted", async () => {
+    const interactiveSpy = vi.spyOn(ingestModule.terminal, "isInteractive").mockReturnValue(true);
+
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([
+      makeParsedSession({ timestamp: new Date().toISOString() }),
+    ]);
+    vi.mocked(sessionExists).mockReturnValue(false);
+    vi.mocked(suggestCaptureFromSessions).mockReturnValue({
+      tag: "frustration",
+      reason: "Rework detected in a newly ingested session.",
+    });
+    nextReadlineAnswer = "y";
+
+    try {
+      await ingestCommand();
+
+      expect(vi.mocked(captureCommand)).toHaveBeenCalledWith(undefined, { tag: "frustration" });
+    } finally {
+      interactiveSpy.mockRestore();
+    }
   });
 });
