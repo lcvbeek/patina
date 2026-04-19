@@ -16,6 +16,7 @@ import {
   ensureSpokeFiles,
 } from "../lib/storage.js";
 import { cwdToSlug } from "../lib/parser.js";
+import { estimateTextTokens } from "../lib/token-estimate.js";
 import { PATINA_SKILL_TEMPLATE } from "../templates/skill.js";
 
 // ---------------------------------------------------------------------------
@@ -69,6 +70,11 @@ const LIVING_DOC_TEMPLATE = `# AI Operating Constitution
 -->
 `;
 
+function coreEstimateLabel(content: string): string {
+  const estimate = estimateTextTokens(content);
+  return `core: ~${estimate.estimatedTokens.toLocaleString()} tokens (${estimate.lines} lines / ${estimate.chars.toLocaleString()} chars)`;
+}
+
 // ---------------------------------------------------------------------------
 // Command
 // ---------------------------------------------------------------------------
@@ -113,7 +119,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 
     if (!docExists) {
       fs.writeFileSync(livingDocPath, LIVING_DOC_TEMPLATE, "utf-8");
-      console.log(`  Created  ${LIVING_DOC_FILE}  (slim core — ~500 tokens)`);
+      console.log(`  Created  ${LIVING_DOC_FILE}  (${coreEstimateLabel(LIVING_DOC_TEMPLATE)})`);
       return;
     }
 
@@ -137,7 +143,9 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     }
 
     fs.writeFileSync(livingDocPath, LIVING_DOC_TEMPLATE, "utf-8");
-    console.log(`\n  Reset  ${LIVING_DOC_FILE}  to default template`);
+    console.log(
+      `\n  Reset  ${LIVING_DOC_FILE}  to default template (${coreEstimateLabel(LIVING_DOC_TEMPLATE)})`,
+    );
     console.log(
       `\nNext steps:\n  patina ingest   — parse Claude Code session logs\n  patina status   — view metrics`,
     );
@@ -188,7 +196,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   console.log(`Initialised patina in ${cwd}\n`);
   console.log(`  Created  ${PATINA_DIR}/`);
   console.log(`  Created  ${CYCLES_DIR}/`);
-  console.log(`  Created  ${LIVING_DOC_FILE}  (slim core — ~500 tokens)`);
+  console.log(`  Created  ${LIVING_DOC_FILE}  (${coreEstimateLabel(LIVING_DOC_TEMPLATE)})`);
   console.log(
     `  Created  ${OPPORTUNITY_BACKLOG_FILE}  (opportunity backlog — grows with each cycle)`,
   );

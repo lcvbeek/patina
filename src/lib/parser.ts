@@ -4,6 +4,7 @@ import path from "path";
 import { z } from "zod";
 import type { SessionSummary } from "./storage.js";
 import { extractContextSnapshot, type ContextSnapshot } from "./context-snapshot.js";
+import { estimateTokensFromChars } from "./token-estimate.js";
 
 // ---------------------------------------------------------------------------
 // Claude Code JSONL message schema (permissive — we only extract what we need)
@@ -269,13 +270,14 @@ export function parseConversationFile(filePath: string, projectName: string): Pa
       project: projectName,
       timestamp: earliest_timestamp || new Date().toISOString(),
       turn_count,
-      estimated_tokens: Math.ceil(char_count / 4.5),
+      estimated_tokens: estimateTokensFromChars(char_count),
       tool_calls,
       had_rework,
       actualTokens,
-      contextSnapshot: contextSnapshot.mcpServers.length > 0 || contextSnapshot.systemPromptTokens > 0
-        ? contextSnapshot
-        : undefined,
+      contextSnapshot:
+        contextSnapshot.mcpServers.length > 0 || contextSnapshot.systemPromptTokens > 0
+          ? contextSnapshot
+          : undefined,
     });
   }
 
