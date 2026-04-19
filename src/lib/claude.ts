@@ -105,7 +105,8 @@ export const ANALYST_PREAMBLE =
   "- Do not hedge with 'may', 'might', 'could suggest', 'hints that' — assert or omit\n" +
   "- Do not paraphrase or repeat the user's own text back to them\n" +
   "- When referencing a working agreement, name or quote it exactly as it appears in PATINA.md\n" +
-  "- Be direct and specific — no generic coaching advice\n";
+  "- Be direct and specific — no generic coaching advice\n" +
+  "- Optimize for machine inference: use short declarative sentences, minimal connective tissue, no prose padding\n";
 
 /**
  * Shared PATINA.md instruction-editing rules injected into any synthesis prompt
@@ -114,7 +115,7 @@ export const ANALYST_PREAMBLE =
 export function patinaMdEditingRules(maxLines: number, maxChars: number): string {
   return (
     "CONTEXT ENGINEERING RULES FOR proposed_instruction:\n" +
-    `The core PATINA.md must stay under ${maxLines} lines / ${maxChars} chars. ` +
+    `The core PATINA.md must stay under ${maxLines} lines / ${maxChars} chars (optimize for token count, not readability). ` +
     'Proposed instructions must be imperative ("Do X" / "Never Y"), not descriptive. ' +
     "Each must apply to >50% of sessions and be measurable. " +
     "Prefer replacing a stale instruction over adding a new one. " +
@@ -132,9 +133,9 @@ export function patinaMdEditingRules(maxLines: number, maxChars: number): string
     "- Working Agreements bullets: 'Topic: Imperative sentence.' format (e.g. 'Scope: Stay within the stated task.')\n" +
     "- Behavior Contract bullets: single imperative clause, no sub-clauses\n" +
     "- Hard Guardrails: table row only — never expand a guardrail into prose\n" +
-    "- One clause per bullet. Never add a second sentence of explanation — rationale lives in the cycle report, not PATINA.md\n" +
-    "- No hedging words: never write 'try to', 'consider', 'where possible', 'ideally', or 'generally'\n" +
-    "- Minimal surface area: the diff should be as short as the existing entries it sits alongside\n\n" +
+    "- One clause per bullet. Never explain or justify — rationale lives in the cycle report, not PATINA.md\n" +
+    "- No hedging: never write 'try to', 'consider', 'where possible', 'ideally', or 'generally'\n" +
+    "- Compress aggressively: remove articles (a/the), use short labels, cut every unnecessary word to stay under cap\n\n" +
     "MARKDOWN LINT RULES for the diff field:\n" +
     "- Lists must have a blank line before and after them\n" +
     '- Bold labels followed by a list need a blank line between (e.g. "**Always do:**\\n\\n- item")\n' +

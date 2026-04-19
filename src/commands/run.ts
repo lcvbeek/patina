@@ -5,6 +5,8 @@ import {
   readAllSessions,
   readCaptures,
   readReflections,
+  readConfig,
+  getDataDir,
   LIVING_DOC_FILE,
   writePendingDiff,
   writeCycleFile,
@@ -17,6 +19,7 @@ import {
   type Capture,
   type Reflection,
 } from "../lib/storage.js";
+import { shouldSync, gitPull } from "../lib/data-dir-git.js";
 import { runIngest } from "./ingest.js";
 import { onboardCommand } from "./onboard.js";
 import { fetchClaudeCapabilities } from "../lib/capabilities.js";
@@ -30,6 +33,7 @@ import {
   trendArrow,
 } from "../lib/metrics.js";
 import type { SessionSummary } from "../lib/storage.js";
+import { estimateTextTokens, type TextTokenEstimate } from "../lib/token-estimate.js";
 
 // ---------------------------------------------------------------------------
 // ANSI helpers (no extra deps)
@@ -132,6 +136,12 @@ function loadLivingDoc(cwd: string): string {
   return combined;
 }
 
+function readPatinaCoreEstimate(cwd: string): TextTokenEstimate | null {
+  const file = path.join(cwd, LIVING_DOC_FILE);
+  if (!fs.existsSync(file)) return null;
+  return estimateTextTokens(fs.readFileSync(file, "utf-8"));
+}
+
 function sessionsInCycle(
   sessions: SessionSummary[],
   lastCycleDate: string | null,
@@ -225,9 +235,7 @@ function buildContextLoadSection(sessions: SessionSummary[]): string | null {
     .sort((a, b) => a - b);
 
   const typicalSystemPromptTokens =
-    systemPromptCosts.length > 0
-      ? systemPromptCosts[Math.floor(systemPromptCosts.length / 2)]
-      : 0;
+    systemPromptCosts.length > 0 ? systemPromptCosts[Math.floor(systemPromptCosts.length / 2)] : 0;
 
   // Derive window size from the most commonly seen model across snapshots
   const modelCounts = new Map<string, number>();
@@ -238,9 +246,10 @@ function buildContextLoadSection(sessions: SessionSummary[]): string | null {
   const typicalModel = [...modelCounts.entries()].sort(([, a], [, b]) => b - a)[0]?.[0];
   const windowSize = modelContextWindow(typicalModel);
 
-  const labelText = typicalSystemPromptTokens > 0
-    ? systemPromptSizeLabel(typicalSystemPromptTokens, windowSize)
-    : null;
+  const labelText =
+    typicalSystemPromptTokens > 0
+      ? systemPromptSizeLabel(typicalSystemPromptTokens, windowSize)
+      : null;
 
   // Collect unique MCP server names across all sessions
   const mcpCounts = new Map<string, number>();
@@ -256,9 +265,10 @@ function buildContextLoadSection(sessions: SessionSummary[]): string | null {
   const lines: string[] = [`Sessions with context data: ${sessionsWithSnapshot.length}`];
 
   if (typicalSystemPromptTokens > 0 && labelText) {
-    const windowNote = windowSize != null
-      ? ` (${Math.round((typicalSystemPromptTokens / windowSize) * 100)}% of ${formatNumber(windowSize)} window)`
-      : "";
+    const windowNote =
+      windowSize != null
+        ? ` (${Math.round((typicalSystemPromptTokens / windowSize) * 100)}% of ${formatNumber(windowSize)} window)`
+        : "";
     lines.push(
       `Typical system prompt size: ~${formatNumber(typicalSystemPromptTokens)} tokens [${labelText}]${windowNote}`,
     );
@@ -593,6 +603,13 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
 
   const cwd = process.cwd();
 
+  // ── 0. Sync dataDir before reading ────────────────────────────────────────
+
+  const dataDir = getDataDir(cwd);
+  if (shouldSync(readConfig(cwd), dataDir)) {
+    gitPull(dataDir);
+  }
+
   // ── 1. Load context ───────────────────────────────────────────────────────
 
   // Auto-ingest new sessions silently before running
@@ -626,6 +643,7 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
   const cycleEnd = today;
 
   const livingDoc = loadLivingDoc(cwd);
+  const coreEstimate = readPatinaCoreEstimate(cwd);
 
   // ── Banner ─────────────────────────────────────────────────────────────────
 
@@ -643,6 +661,11 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
   if (cycleCaptures.length > 0) {
     console.log(
       `  Captures     : ${bold(String(cycleCaptures.length))} ${dim("notable moment(s) queued")}`,
+    );
+  }
+  if (coreEstimate) {
+    console.log(
+      `  PATINA core  : ${bold(`~${formatNumber(coreEstimate.estimatedTokens)} tokens`)} ${dim(`(${coreEstimate.lines} lines / ${formatNumber(coreEstimate.chars)} chars)`)}`,
     );
   }
 

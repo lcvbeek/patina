@@ -30,6 +30,12 @@ vi.mock("../lib/storage.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../lib/data-dir-git.js", () => ({
+  shouldSync: vi.fn(() => false),
+  gitPull: vi.fn(),
+  gitPush: vi.fn(),
+}));
+
 vi.mock("./ingest.js", () => ({
   runIngest: vi.fn(() => ({ ingested: 0, skipped: 0, errors: 0 })),
 }));
@@ -681,6 +687,21 @@ describe("runCommand", () => {
     await runCommand();
     const consoleCalls = vi.mocked(console.log).mock.calls.flat().join(" ");
     expect(consoleCalls).toContain("1");
+  });
+
+  it("shows the PATINA core estimate in the run banner when PATINA.md exists", async () => {
+    vi.mocked(fs.existsSync).mockImplementation((p: string | Buffer | URL) =>
+      String(p).includes("PATINA.md"),
+    );
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      "# AI Operating Constitution\n\n## 1. Working Agreements\n",
+    );
+
+    await runCommand();
+
+    const consoleCalls = vi.mocked(console.log).mock.calls.flat().join(" ");
+    expect(consoleCalls).toContain("PATINA core");
+    expect(consoleCalls).toContain("tokens");
   });
 
   it("logs reflection count and authors when reflections are found", async () => {

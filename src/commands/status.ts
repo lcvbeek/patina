@@ -17,7 +17,16 @@ import {
   trendArrow,
 } from "../lib/metrics.js";
 import { readGlobalMcpServers, readProjectMcpServers, activeServers, isStale } from "../lib/mcp.js";
-import { modelContextWindow, systemPromptSizeLabel, type SystemPromptLabel } from "../lib/context-snapshot.js";
+import {
+  modelContextWindow,
+  systemPromptSizeLabel,
+  type SystemPromptLabel,
+} from "../lib/context-snapshot.js";
+import {
+  estimateTextTokens,
+  exceedsPatinaCoreTokenTarget,
+  PATINA_CORE_TOKEN_TARGET,
+} from "../lib/token-estimate.js";
 
 // ---------------------------------------------------------------------------
 // ANSI colour helpers (no deps)
@@ -80,6 +89,10 @@ export async function statusCommand(): Promise<void> {
 
   const agg = computeAggregates(sessions);
   const trend = computeTrend(sessions);
+  const livingDocPath = path.join(process.cwd(), LIVING_DOC_FILE);
+  const coreEstimate = fs.existsSync(livingDocPath)
+    ? estimateTextTokens(fs.readFileSync(livingDocPath, "utf-8"))
+    : null;
 
   // Header
   console.log(bold("\npatina — status report"));
@@ -95,6 +108,11 @@ export async function statusCommand(): Promise<void> {
   console.log(`  Total sessions       ${bold(formatNumber(agg.total_sessions))}`);
   console.log(`  Total tokens (est.)  ${bold(formatNumber(agg.total_tokens))}`);
   console.log(`  Avg tokens/session   ${bold(formatNumber(agg.avg_tokens_per_session))}`);
+  if (coreEstimate) {
+    console.log(
+      `  PATINA core (est.)   ${bold(`~${formatNumber(coreEstimate.estimatedTokens)} tokens`)} ${dim(`(${coreEstimate.lines} lines / ${formatNumber(coreEstimate.chars)} chars)`)}`,
+    );
+  }
   console.log(
     `  Sessions with rework ${bold(formatNumber(agg.rework_sessions))}  ${dim(`(${agg.rework_rate_pct}%)`)}`,
   );
@@ -211,9 +229,10 @@ export async function statusCommand(): Promise<void> {
     if (medianSystemPromptTokens !== null) {
       const label = systemPromptSizeLabel(medianSystemPromptTokens, windowSize);
       const colour = labelColour(label);
-      const windowNote = windowSize != null
-        ? `${Math.round((medianSystemPromptTokens / windowSize) * 100)}% of ${formatNumber(windowSize)} window`
-        : "";
+      const windowNote =
+        windowSize != null
+          ? `${Math.round((medianSystemPromptTokens / windowSize) * 100)}% of ${formatNumber(windowSize)} window`
+          : "";
       console.log(
         `  System prompt (typical)  ${bold(formatNumber(medianSystemPromptTokens))} tokens  ${colour(`[${label}]`)}${windowNote ? `  ${dim(windowNote)}` : ""}`,
       );
@@ -225,7 +244,9 @@ export async function statusCommand(): Promise<void> {
         ? `${activeGlobal.length} global, ${activeProject.length} project-scoped`
         : `${activeGlobal.length} global`;
 
-    console.log(`  Active MCP servers       ${bold(String(totalActive))}  ${dim(`(${scopeBreakdown})`)}`);
+    console.log(
+      `  Active MCP servers       ${bold(String(totalActive))}  ${dim(`(${scopeBreakdown})`)}`,
+    );
 
     if (totalActive > 5) {
       console.log(
@@ -284,12 +305,17 @@ export async function statusCommand(): Promise<void> {
   }
 
   // PATINA.md size warning
-  const livingDoc = path.join(process.cwd(), LIVING_DOC_FILE);
-  if (fs.existsSync(livingDoc)) {
-    const lineCount = fs.readFileSync(livingDoc, "utf-8").split("\n").length;
-    if (lineCount > CORE_MAX_LINES) {
+  if (coreEstimate) {
+    if (exceedsPatinaCoreTokenTarget(coreEstimate)) {
       console.log(
-        `\n${yellow("⚑")}  ${bold("PATINA.md")} is ${bold(String(lineCount))} lines — over the ${CORE_MAX_LINES}-line limit.`,
+        `\n${yellow("⚑")}  ${bold("PATINA.md")} core estimate is ${bold(`~${formatNumber(coreEstimate.estimatedTokens)} tokens`)}, above target (~${PATINA_CORE_TOKEN_TARGET}).`,
+      );
+      console.log("   Keep the always-loaded core lean by moving detail to spoke files.");
+    }
+
+    if (coreEstimate.lines > CORE_MAX_LINES) {
+      console.log(
+        `\n${yellow("⚑")}  ${bold("PATINA.md")} is ${bold(String(coreEstimate.lines))} lines — over the ${CORE_MAX_LINES}-line limit.`,
       );
       console.log(`   Run ${bold("patina run")} to trim it.`);
     }

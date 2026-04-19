@@ -512,6 +512,13 @@ describe("onboardCommand", () => {
     expect(allLogs).toContain("cycles/");
   });
 
+  it("logs the post-write PATINA core estimate after applying", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    await onboardCommand(CWD);
+    const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
+    expect(allLogs).toContain("Core PATINA.md now ~");
+  });
+
   it("aborts without writing when confirmed with 'N'", async () => {
     setupReadlineAnswers("N");
     await onboardCommand(CWD);

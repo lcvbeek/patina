@@ -623,6 +623,19 @@ describe("applyCommand", () => {
     expect(consoleCalls).toContain("Pending diff cleared");
   });
 
+  it("logs the post-write PATINA core estimate", async () => {
+    vi.mocked(readPendingDiff).mockReturnValue(makePendingDiff());
+    vi.mocked(fs.existsSync).mockImplementation((p: string | Buffer | URL) => {
+      return String(p).includes("PATINA.md");
+    });
+    vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_DOC);
+
+    await applyCommand({ yes: true });
+
+    const consoleCalls = vi.mocked(console.log).mock.calls.flat().join(" ");
+    expect(consoleCalls).toContain("Core PATINA.md now ~");
+  });
+
   it("logs 'Opportunity added' when opportunity was present", async () => {
     vi.mocked(readPendingDiff).mockReturnValue(makePendingDiff());
     vi.mocked(fs.existsSync).mockReturnValue(false);

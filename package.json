@@ -1,6 +1,6 @@
 {
   "name": "@lcvbeek/patina",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Shared AI instructions that compound over time",
   "type": "module",
   "main": "dist/index.js",
@@ -21,7 +21,7 @@
     "type": "git",
     "url": "git+https://github.com/lcvbeek/patina.git"
   },
-  "homepage": "https://patina-web-rho.vercel.app/",
+  "homepage": "https://patinamd.vercel.app/",
   "bugs": {
     "url": "https://github.com/lcvbeek/patina/issues"
   },

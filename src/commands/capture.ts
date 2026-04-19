@@ -8,6 +8,7 @@ import {
   readAllSessions,
   writePendingDiff,
   readConfig,
+  getDataDir,
   getSessionsInCycle,
   getLatestCycleDate,
   CAPTURE_TAGS,
@@ -19,6 +20,7 @@ import {
   type PendingDiff,
 } from "../lib/storage.js";
 import { getGitAuthor } from "../lib/git.js";
+import { shouldSync, gitPush } from "../lib/data-dir-git.js";
 import { callClaudeForJson, ANALYST_PREAMBLE, patinaMdEditingRules } from "../lib/claude.js";
 import { startSpinner } from "../lib/ui.js";
 import { computeAggregates, formatNumber } from "../lib/metrics.js";
@@ -257,6 +259,11 @@ export async function captureCommand(
 
   const cwd = process.cwd();
   writeCapture(capture, cwd);
+
+  const dataDirPath = getDataDir(cwd);
+  if (shouldSync(readConfig(cwd), dataDirPath)) {
+    gitPush(dataDirPath, `capture: ${now.toISOString().slice(0, 10)} ${capture.author}`);
+  }
 
   const tagLabel = captureTag ? ` ${cyan(`[${captureTag}]`)}` : "";
   const when = now.toLocaleDateString("en-US", {
