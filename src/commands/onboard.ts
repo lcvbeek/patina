@@ -3,6 +3,7 @@ import path from "path";
 import readline from "readline";
 import { LIVING_DOC_FILE, SPOKE_FILES, writeCycleFile, ensureSpokeFiles } from "../lib/storage.js";
 import { callClaudeForJson } from "../lib/claude.js";
+import { estimateTextTokens } from "../lib/token-estimate.js";
 
 // ---------------------------------------------------------------------------
 // ANSI helpers
@@ -330,6 +331,7 @@ export async function onboardCommand(cwd: string): Promise<void> {
 
   // Update the "last updated" timestamp
   const dated = populated.replace(/> Last updated: .+/, `> Last updated: ${today}`);
+  const coreEstimate = estimateTextTokens(dated);
 
   fs.writeFileSync(livingDocPath, dated, "utf-8");
 
@@ -377,6 +379,10 @@ ${QUESTIONS.map((q) => `**${q.text}**\n\n${answers[q.key] || "_(no answer)_"}`).
 
   console.log();
   console.log(green("✓") + ` Applied to ${bold(LIVING_DOC_FILE)}`);
+  console.log(
+    green("✓") +
+      ` Core PATINA.md now ~${coreEstimate.estimatedTokens.toLocaleString()} tokens (${coreEstimate.lines} lines / ${coreEstimate.chars.toLocaleString()} chars)`,
+  );
   console.log(green("✓") + `  Cycle report saved to ${dim(`.patina/cycles/${today}.md`)}`);
   console.log();
   console.log(

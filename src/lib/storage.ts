@@ -361,6 +361,13 @@ export interface PatinaConfig {
    * Set to 0 to disable. Default: 10.
    */
   retroReminderAfterSessions?: number;
+  /**
+   * Controls git sync behaviour for the dataDir.
+   * "git"     → always run git pull/push around reads/writes
+   * false     → never run git sync (explicit opt-out)
+   * undefined → auto-detect: sync if dataDir is a git working tree
+   */
+  dataDirSync?: "git" | false;
 }
 
 const DEFAULT_CONFIG: PatinaConfig = {

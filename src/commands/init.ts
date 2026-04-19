@@ -2,6 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import readline from "readline";
+import { spawnSync } from "child_process";
 import {
   PATINA_DIR,
   CYCLES_DIR,
@@ -10,13 +11,16 @@ import {
   OPPORTUNITY_BACKLOG_TEMPLATE,
   PATINA_CONFIG_FILE,
   getDataDir,
+  readConfig,
   patinaExists,
   ensureDir,
   writeJson,
   ensureSpokeFiles,
 } from "../lib/storage.js";
 import { cwdToSlug } from "../lib/parser.js";
+import { estimateTextTokens } from "../lib/token-estimate.js";
 import { PATINA_SKILL_TEMPLATE } from "../templates/skill.js";
+import { ensureDataDirGitignore } from "../lib/data-dir-git.js";
 
 // ---------------------------------------------------------------------------
 // Living-doc template — slim core (~55 lines, ~500 tokens)
@@ -69,6 +73,11 @@ const LIVING_DOC_TEMPLATE = `# AI Operating Constitution
 -->
 `;
 
+function coreEstimateLabel(content: string): string {
+  const estimate = estimateTextTokens(content);
+  return `core: ~${estimate.estimatedTokens.toLocaleString()} tokens (${estimate.lines} lines / ${estimate.chars.toLocaleString()} chars)`;
+}
+
 // ---------------------------------------------------------------------------
 // Command
 // ---------------------------------------------------------------------------
@@ -76,6 +85,64 @@ const LIVING_DOC_TEMPLATE = `# AI Operating Constitution
 export interface InitOptions {
   /** Scaffold ~/.claude/skills/patina/SKILL.md alongside project init. */
   skill?: boolean;
+  /** Clone a shared git repo as the dataDir and enable git sync. */
+  dataRepo?: string;
+}
+
+// ---------------------------------------------------------------------------
+// data-repo helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive a filesystem-safe slug from a git remote URL.
+ * e.g. https://github.com/acme/retro-data.git → github-com-acme-retro-data
+ */
+function repoUrlToSlug(url: string): string {
+  return url
+    .replace(/^(https?:\/\/|git@|ssh:\/\/)/, "")
+    .replace(/\.git$/, "")
+    .replace(/[/:@]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/**
+ * Clone the remote repo into ~/.patina/data/<slug>, write .gitignore,
+ * and update .patina/config.json with dataDir + dataDirSync: "git".
+ */
+async function initDataRepo(repoUrl: string, cwd: string): Promise<void> {
+  const slug = repoUrlToSlug(repoUrl);
+  const clonePath = path.join(os.homedir(), ".patina", "data", slug);
+
+  if (fs.existsSync(clonePath)) {
+    console.log(`\nData repo already cloned at ${clonePath}`);
+    console.log(`Updating .patina/config.json to point at it.`);
+  } else {
+    console.log(`\nCloning ${repoUrl}`);
+    console.log(`  → ${clonePath}\n`);
+    ensureDir(path.dirname(clonePath));
+    const result = spawnSync("git", ["clone", repoUrl, clonePath], { stdio: "inherit" });
+    if (result.status !== 0) {
+      console.error(`\nError: git clone failed. Check the URL and your access permissions.`);
+      process.exit(1);
+    }
+  }
+
+  ensureDataDirGitignore(clonePath);
+
+  const existingConfig = readConfig(cwd);
+  writeJson(path.join(cwd, PATINA_CONFIG_FILE), {
+    ...existingConfig,
+    dataDir: clonePath,
+    dataDirSync: "git",
+  });
+
+  console.log(`\n  Data repo  ${clonePath}`);
+  console.log(`  Config     .patina/config.json  (dataDir + dataDirSync: "git")`);
+  console.log(`\nNext steps:`);
+  console.log(`  patina ingest    — import your sessions and push to shared repo`);
+  console.log(`  Share the repo URL with teammates: ${repoUrl}`);
+  console.log(`  Each teammate runs: patina init --data-repo ${repoUrl}`);
 }
 
 /**
@@ -93,6 +160,11 @@ function installPatinaSkill(): "created" | "exists" {
 
 export async function initCommand(options: InitOptions = {}): Promise<void> {
   const cwd = process.cwd();
+
+  if (options.dataRepo) {
+    await initDataRepo(options.dataRepo, cwd);
+    return;
+  }
 
   if (patinaExists(cwd)) {
     // --skill on an already-initialised project: install the skill only,
@@ -113,7 +185,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 
     if (!docExists) {
       fs.writeFileSync(livingDocPath, LIVING_DOC_TEMPLATE, "utf-8");
-      console.log(`  Created  ${LIVING_DOC_FILE}  (slim core — ~500 tokens)`);
+      console.log(`  Created  ${LIVING_DOC_FILE}  (${coreEstimateLabel(LIVING_DOC_TEMPLATE)})`);
       return;
     }
 
@@ -137,7 +209,9 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     }
 
     fs.writeFileSync(livingDocPath, LIVING_DOC_TEMPLATE, "utf-8");
-    console.log(`\n  Reset  ${LIVING_DOC_FILE}  to default template`);
+    console.log(
+      `\n  Reset  ${LIVING_DOC_FILE}  to default template (${coreEstimateLabel(LIVING_DOC_TEMPLATE)})`,
+    );
     console.log(
       `\nNext steps:\n  patina ingest   — parse Claude Code session logs\n  patina status   — view metrics`,
     );
@@ -188,7 +262,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   console.log(`Initialised patina in ${cwd}\n`);
   console.log(`  Created  ${PATINA_DIR}/`);
   console.log(`  Created  ${CYCLES_DIR}/`);
-  console.log(`  Created  ${LIVING_DOC_FILE}  (slim core — ~500 tokens)`);
+  console.log(`  Created  ${LIVING_DOC_FILE}  (${coreEstimateLabel(LIVING_DOC_TEMPLATE)})`);
   console.log(
     `  Created  ${OPPORTUNITY_BACKLOG_FILE}  (opportunity backlog — grows with each cycle)`,
   );

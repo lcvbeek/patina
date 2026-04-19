@@ -14,6 +14,7 @@ import {
   appendOpportunity,
 } from "../lib/storage.js";
 import { lintMarkdown, fixMarkdown } from "../lib/lint.js";
+import { estimateTextTokens, type TextTokenEstimate } from "../lib/token-estimate.js";
 
 const isTTY = process.stdout.isTTY;
 function bold(s: string) {
@@ -283,6 +284,7 @@ export async function applyCommand(options: { yes?: boolean } = {}): Promise<voi
 
   // Update the "last updated" timestamp in core PATINA.md
   const livingDocPath = path.join(cwd, LIVING_DOC_FILE);
+  let coreEstimate: TextTokenEstimate | null = null;
   if (fs.existsSync(livingDocPath)) {
     let coreContent = fs.readFileSync(livingDocPath, "utf-8");
     const today = new Date().toISOString().slice(0, 10);
@@ -293,14 +295,13 @@ export async function applyCommand(options: { yes?: boolean } = {}): Promise<voi
       `> Last updated: ${today}`,
     );
     fs.writeFileSync(livingDocPath, coreContent, "utf-8");
+    coreEstimate = estimateTextTokens(coreContent);
 
     // Enforce hard cap on core PATINA.md
-    const coreLines = coreContent.split("\n");
-    const coreChars = coreContent.length;
-    if (coreLines.length > CORE_MAX_LINES || coreChars > CORE_MAX_CHARS) {
+    if (coreEstimate.lines > CORE_MAX_LINES || coreEstimate.chars > CORE_MAX_CHARS) {
       console.log(
         yellow("!") +
-          `  Core PATINA.md exceeds limits (${coreLines.length} lines / ${coreChars} chars).` +
+          `  Core PATINA.md exceeds limits (${coreEstimate.lines} lines / ${coreEstimate.chars} chars).` +
           `  Cap: ${CORE_MAX_LINES} lines / ${CORE_MAX_CHARS} chars.` +
           `  Consider pruning stale entries or moving detail to spoke files.`,
       );
@@ -329,6 +330,12 @@ export async function applyCommand(options: { yes?: boolean } = {}): Promise<voi
   console.log(green("✓") + " Cycle history updated");
   if (pending.opportunity) {
     console.log(green("✓") + " Opportunity added to .patina/opportunity-backlog.md");
+  }
+  if (coreEstimate) {
+    console.log(
+      green("✓") +
+        ` Core PATINA.md now ~${coreEstimate.estimatedTokens.toLocaleString()} tokens (${coreEstimate.lines} lines / ${coreEstimate.chars.toLocaleString()} chars)`,
+    );
   }
   console.log(green("✓") + " Pending diff cleared");
   console.log();
