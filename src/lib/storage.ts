@@ -362,7 +362,17 @@ export interface PatinaConfig {
    */
   retroReminderAfterSessions?: number;
   /**
-   * Controls git sync behaviour for the dataDir.
+   * Controls fetching of Claude Code changelog for synthesis context.
+   */
+  capabilities?: {
+    /** Fetch and inject Claude Code capabilities into the synthesis prompt. Default: true. */
+    enabled?: boolean;
+    /** Cache TTL in hours. Default: 24. */
+    ttlHours?: number;
+    /** URL to fetch. Default: Claude Code GitHub CHANGELOG. */
+    url?: string;
+  };
+  /** Controls git sync behaviour for the dataDir.
    * "git"     → always run git pull/push around reads/writes
    * false     → never run git sync (explicit opt-out)
    * undefined → auto-detect: sync if dataDir is a git working tree
