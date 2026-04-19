@@ -76,7 +76,6 @@ async function maybeSuggestCapture(
       await captureCommand(undefined, { tag: suggestion.tag });
     }
   } catch (err) {
-    console.warn("Warning: capture suggestion failed. Re-run with --verbose for details.");
     if (options.verbose) {
       console.warn(
         `Warning: skipping capture suggestion: ${err instanceof Error ? err.message : String(err)}`,
