@@ -1,19 +1,89 @@
 import path from "path";
+import readline from "readline";
 import {
   assertInitialised,
   sessionExists,
   writeSession,
+  readCaptures,
   readConfig,
+  getLatestCycleDate,
   getDataDir,
   type SessionSummary,
 } from "../lib/storage.js";
 import { discoverProjects, cwdToSlug, parseConversationFile } from "../lib/parser.js";
 import { getGitAuthor } from "../lib/git.js";
+import { captureCommand } from "./capture.js";
+import { suggestCaptureFromSessions } from "../lib/capture-triggers.js";
 import { shouldSync, gitPush } from "../lib/data-dir-git.js";
 
 export interface IngestOptions {
   claudeDir?: string;
   verbose?: boolean;
+}
+
+export const terminal = {
+  isInteractive: (): boolean => Boolean(process.stdin.isTTY && process.stdout.isTTY),
+};
+
+async function maybeSuggestCapture(
+  ingestedSessions: SessionSummary[],
+  options: IngestOptions,
+): Promise<void> {
+  if (!terminal.isInteractive() || ingestedSessions.length === 0) return;
+
+  try {
+    const cwd = process.cwd();
+    const lastCycleDate = getLatestCycleDate(cwd);
+    const capturesThisCycle = readCaptures(cwd, lastCycleDate);
+    const lastCaptureMs = capturesThisCycle.reduce<number | null>((max, c) => {
+      const ts = new Date(c.timestamp).getTime();
+      if (!Number.isFinite(ts)) return max;
+      if (max === null) return ts;
+      return Math.max(max, ts);
+    }, null);
+
+    const sessionsSinceLastCapture = lastCaptureMs
+      ? ingestedSessions.filter((s) => {
+          const ts = new Date(s.ingested_at).getTime();
+          return Number.isFinite(ts) && ts > lastCaptureMs;
+        })
+      : ingestedSessions;
+
+    const newestSessionMs = sessionsSinceLastCapture.reduce((max, s) => {
+      const ts = new Date(s.timestamp).getTime();
+      return Number.isFinite(ts) ? Math.max(max, ts) : max;
+    }, 0);
+    const isRecent = newestSessionMs > 0 && Date.now() - newestSessionMs < 1000 * 60 * 60 * 48;
+    if (!isRecent) return;
+
+    const suggestion = suggestCaptureFromSessions(sessionsSinceLastCapture);
+    if (!suggestion) return;
+
+    console.log(`\nCapture suggestion: ${suggestion.reason}`);
+    console.log(
+      `Run \`patina capture --tag ${suggestion.tag}\` to record what happened (a short, human-written summary).`,
+    );
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true,
+    });
+    const answer = await new Promise<string>((resolve) => {
+      rl.question("Capture now? (y/N) ", (a) => resolve(a.trim()));
+    });
+    rl.close();
+
+    if (answer.toLowerCase().startsWith("y")) {
+      await captureCommand(undefined, { tag: suggestion.tag });
+    }
+  } catch (err) {
+    if (options.verbose) {
+      console.warn(
+        `Warning: skipping capture suggestion: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 }
 
 /**
@@ -105,6 +175,7 @@ export async function ingestCommand(options: IngestOptions = {}): Promise<void> 
   let ingested = 0;
   let skipped = 0;
   let errors = 0;
+  const ingestedSessions: SessionSummary[] = [];
 
   for (const project of projects) {
     if (options.verbose) {
@@ -141,6 +212,7 @@ export async function ingestCommand(options: IngestOptions = {}): Promise<void> 
       try {
         writeSession(summary);
         ingested++;
+        ingestedSessions.push(summary);
         if (options.verbose) {
           console.log(
             `    ingest ${parsed.session_id} (${parsed.turn_count} turns, ~${parsed.estimated_tokens.toLocaleString()} tokens)`,
@@ -164,6 +236,7 @@ export async function ingestCommand(options: IngestOptions = {}): Promise<void> 
     console.log("Run `patina status` to see metrics.");
   }
 
+  await maybeSuggestCapture(ingestedSessions, options);
   if (ingested > 0) {
     const dataDir = getDataDir();
     if (shouldSync(readConfig(), dataDir)) {

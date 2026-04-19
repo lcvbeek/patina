@@ -34,9 +34,24 @@ Parse \`$ARGUMENTS\` and run the matching Patina CLI command via Bash. If \`pati
 - **Never assume which question is being answered.** If the user says \`/patina reflect "Claude nailed it"\` without a key, let the CLI pick the next unanswered one and tell the user which question was recorded against.
 - **Be terse.** One or two lines of confirmation. No preamble.
 
+### Capture triggers (when to suggest \`/patina capture\`)
+
+If the user expresses any of the below in-chat, offer to capture it. Always ask for confirmation before recording.
+
+Map to tags:
+
+- **near-miss**: "almost", "accidentally", "caught it just in time", "glad we didn't"
+- **frustration**: "stuck", "this is annoying", "ugh", "why is this so hard"
+- **went-well**: "that was smooth", "worked first try", "nice"
+- **pattern**: "again", "every time", "we always", "this keeps happening"
+
+When capturing, prefer a short, human-written summary. Do not paste long transcript excerpts from the session; Patina already ingests session logs separately.
+
 ### Conversational intent
 
 Beyond explicit \`/patina\` invocations, if the user spontaneously answers a reflection question in chat (e.g., "honestly, this cycle felt rushed"), offer to record it: "Want me to save that as your answer to \`overall_feel\`?" — only record after confirmation.
+
+Similarly, if the user shares a notable moment (near-miss / frustration / pattern / went-well), offer to capture it with \`/patina capture\`.
 
 ### Examples
 
