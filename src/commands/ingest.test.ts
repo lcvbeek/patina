@@ -15,6 +15,12 @@ vi.mock("../lib/storage.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../lib/data-dir-git.js", () => ({
+  shouldSync: vi.fn(() => false),
+  gitPull: vi.fn(),
+  gitPush: vi.fn(),
+}));
+
 vi.mock("../lib/parser.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/parser.js")>();
   return {

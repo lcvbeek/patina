@@ -25,7 +25,8 @@ program
   .command("init")
   .description("Scaffold .patina/ in the current directory and create PATINA.md")
   .option("--skill", "Also install the /patina Claude Code skill at ~/.claude/skills/patina/")
-  .action(async (options: { skill?: boolean }) => {
+  .option("--data-repo <url>", "Clone a shared git repo as the dataDir and enable git sync")
+  .action(async (options: { skill?: boolean; dataRepo?: string }) => {
     await initCommand(options);
   });
 

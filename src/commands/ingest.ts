@@ -4,10 +4,12 @@ import {
   sessionExists,
   writeSession,
   readConfig,
+  getDataDir,
   type SessionSummary,
 } from "../lib/storage.js";
 import { discoverProjects, cwdToSlug, parseConversationFile } from "../lib/parser.js";
 import { getGitAuthor } from "../lib/git.js";
+import { shouldSync, gitPush } from "../lib/data-dir-git.js";
 
 export interface IngestOptions {
   claudeDir?: string;
@@ -160,5 +162,12 @@ export async function ingestCommand(options: IngestOptions = {}): Promise<void> 
 
   if (ingested > 0) {
     console.log("Run `patina status` to see metrics.");
+  }
+
+  if (ingested > 0) {
+    const dataDir = getDataDir();
+    if (shouldSync(readConfig(), dataDir)) {
+      gitPush(dataDir, `ingest: ${new Date().toISOString().slice(0, 10)}`);
+    }
   }
 }
