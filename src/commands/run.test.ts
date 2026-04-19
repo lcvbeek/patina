@@ -44,6 +44,10 @@ vi.mock("./onboard.js", () => ({
   onboardCommand: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock("./apply.js", () => ({
+  applyCommand: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("../lib/claude.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/claude.js")>();
   return {
@@ -99,6 +103,7 @@ import {
 } from "../lib/storage.js";
 import { runIngest } from "./ingest.js";
 import { onboardCommand } from "./onboard.js";
+import { applyCommand } from "./apply.js";
 import { callClaudeForJson } from "../lib/claude.js";
 import { startSpinner } from "../lib/ui.js";
 import fs from "fs";
@@ -558,6 +563,7 @@ describe("runCommand", () => {
     vi.mocked(loadOpportunityBacklog).mockReturnValue(null);
     vi.mocked(callClaudeForJson).mockResolvedValue(MOCK_SYNTHESIS);
     vi.mocked(startSpinner).mockReturnValue(mockStopSpinner);
+    vi.mocked(applyCommand).mockResolvedValue(undefined);
     vi.mocked(fs.existsSync).mockReturnValue(false);
     vi.mocked(fs.readFileSync).mockReturnValue("# AI Operating Constitution\n");
   });
@@ -745,10 +751,16 @@ describe("runCommand", () => {
     expect(consoleCalls).toContain(`${today}.md`);
   });
 
-  it("suggests patina buff in the footer output", async () => {
+  it("calls applyCommand with yes:true after successful synthesis", async () => {
     await runCommand();
-    const consoleCalls = vi.mocked(console.log).mock.calls.flat().join(" ");
-    expect(consoleCalls).toContain("patina buff");
+    expect(applyCommand).toHaveBeenCalledOnce();
+    expect(applyCommand).toHaveBeenCalledWith({ yes: true });
+  });
+
+  it("does not call applyCommand when Claude call fails", async () => {
+    vi.mocked(callClaudeForJson).mockRejectedValue(new Error("fail"));
+    await expect(runCommand()).rejects.toThrow("process.exit(1)");
+    expect(applyCommand).not.toHaveBeenCalled();
   });
 
   it("logs 'No patterns identified' when synthesis returns empty patterns", async () => {

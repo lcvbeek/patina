@@ -110,7 +110,9 @@ program
 // ---------------------------------------------------------------------------
 program
   .command("buff")
-  .description("Review and apply the proposed instruction change from patina run")
+  .description(
+    "[deprecated] patina run now applies changes automatically — kept for backwards compatibility",
+  )
   .option("-y, --yes", "Apply without prompting")
   .action(async (options: { yes?: boolean }) => {
     await applyCommand(options);
@@ -118,7 +120,9 @@ program
 
 program
   .command("apply")
-  .description("Alias for patina buff")
+  .description(
+    "[deprecated] patina run now applies changes automatically — kept for backwards compatibility",
+  )
   .option("-y, --yes", "Apply without prompting")
   .action(async (options: { yes?: boolean }) => {
     await applyCommand(options);

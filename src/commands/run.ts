@@ -22,6 +22,7 @@ import {
 import { shouldSync, gitPull } from "../lib/data-dir-git.js";
 import { runIngest } from "./ingest.js";
 import { onboardCommand } from "./onboard.js";
+import { applyCommand } from "./apply.js";
 import { fetchClaudeCapabilities } from "../lib/capabilities.js";
 import { callClaudeForJson, ANALYST_PREAMBLE, patinaMdEditingRules } from "../lib/claude.js";
 import { startSpinner } from "../lib/ui.js";
@@ -736,7 +737,7 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
 
   writeCycleFile(today, cycleMarkdown, cwd);
 
-  // Save pending diff for patina diff/apply
+  // Write pending diff so applyCommand can read it
   const pendingDiff: PendingDiff = {
     section: synthesis.proposed_instruction.section,
     rationale: synthesis.proposed_instruction.rationale,
@@ -747,12 +748,15 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
 
   writePendingDiff(pendingDiff, cwd);
 
-  // ── Footer ─────────────────────────────────────────────────────────────────
+  // ── 6. Auto-apply proposed instruction change ─────────────────────────────
 
   console.log(`\n${hr()}`);
   console.log(`\n${bold("Saved:")}`);
   console.log(`  Cycle report   ${dim(`.patina/cycles/${today}.md`)}`);
   console.log();
-  console.log(`Run ${cyan("`patina buff`")} to review and apply the proposed instruction change.`);
+
+  await applyCommand({ yes: true });
+
+  console.log(dim(`Review changes with: git diff`));
   console.log();
 }
