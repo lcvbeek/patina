@@ -42,7 +42,7 @@ async function maybeSuggestCapture(
 
     const sessionsSinceLastCapture = lastCaptureMs
       ? ingestedSessions.filter((s) => {
-          const ts = new Date(s.timestamp).getTime();
+          const ts = new Date(s.ingested_at).getTime();
           return Number.isFinite(ts) && ts > lastCaptureMs;
         })
       : ingestedSessions;
