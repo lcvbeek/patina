@@ -750,6 +750,6 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
 
   await applyCommand({ yes: true });
 
-  console.log(dim(`Review with: git diff PATINA.md`));
+  console.log(dim(`Review changes with: git diff`));
   console.log();
 }
