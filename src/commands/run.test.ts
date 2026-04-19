@@ -30,6 +30,12 @@ vi.mock("../lib/storage.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../lib/data-dir-git.js", () => ({
+  shouldSync: vi.fn(() => false),
+  gitPull: vi.fn(),
+  gitPush: vi.fn(),
+}));
+
 vi.mock("./ingest.js", () => ({
   runIngest: vi.fn(() => ({ ingested: 0, skipped: 0, errors: 0 })),
 }));

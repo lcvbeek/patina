@@ -5,6 +5,8 @@ import {
   readAllSessions,
   readCaptures,
   readReflections,
+  readConfig,
+  getDataDir,
   LIVING_DOC_FILE,
   writePendingDiff,
   writeCycleFile,
@@ -17,6 +19,7 @@ import {
   type Capture,
   type Reflection,
 } from "../lib/storage.js";
+import { shouldSync, gitPull } from "../lib/data-dir-git.js";
 import { runIngest } from "./ingest.js";
 import { onboardCommand } from "./onboard.js";
 import { callClaudeForJson, ANALYST_PREAMBLE, patinaMdEditingRules } from "../lib/claude.js";
@@ -596,6 +599,13 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
   assertInitialised();
 
   const cwd = process.cwd();
+
+  // ── 0. Sync dataDir before reading ────────────────────────────────────────
+
+  const dataDir = getDataDir(cwd);
+  if (shouldSync(readConfig(cwd), dataDir)) {
+    gitPull(dataDir);
+  }
 
   // ── 1. Load context ───────────────────────────────────────────────────────
 

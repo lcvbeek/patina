@@ -4,6 +4,7 @@ import {
   getLatestCycleDate,
   getDataDir,
   readAllSessions,
+  readConfig,
   writeReflection,
   type Reflection,
 } from "../lib/storage.js";
@@ -11,6 +12,7 @@ import { generateId } from "./capture.js";
 import { loadQuestions } from "../lib/questions.js";
 import { getGitAuthor } from "../lib/git.js";
 import { formatNumber } from "../lib/metrics.js";
+import { shouldSync, gitPush } from "../lib/data-dir-git.js";
 
 // ---------------------------------------------------------------------------
 // ANSI helpers
@@ -118,6 +120,10 @@ export async function reflectCommand(): Promise<void> {
 
   const safeId = id.replace(/[^a-zA-Z0-9_-]/g, "_");
   const dataDir = getDataDir(cwd);
+
+  if (shouldSync(readConfig(cwd), dataDir)) {
+    gitPush(dataDir, `reflect: ${new Date().toISOString().slice(0, 10)} ${reflection.author}`);
+  }
 
   console.log(hr());
   console.log();

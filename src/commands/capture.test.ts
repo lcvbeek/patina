@@ -26,6 +26,12 @@ vi.mock("../lib/git.js", async (importOriginal) => {
   return { ...actual, getGitAuthor: vi.fn() };
 });
 
+vi.mock("../lib/data-dir-git.js", () => ({
+  shouldSync: vi.fn(() => false),
+  gitPull: vi.fn(),
+  gitPush: vi.fn(),
+}));
+
 vi.mock("../lib/claude.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/claude.js")>();
   return { ...actual, callClaudeForJson: vi.fn() };
