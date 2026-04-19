@@ -23,6 +23,7 @@ import { shouldSync, gitPull } from "../lib/data-dir-git.js";
 import { runIngest } from "./ingest.js";
 import { onboardCommand } from "./onboard.js";
 import { applyCommand } from "./apply.js";
+import { fetchClaudeCapabilities } from "../lib/capabilities.js";
 import { callClaudeForJson, ANALYST_PREAMBLE, patinaMdEditingRules } from "../lib/claude.js";
 import { startSpinner } from "../lib/ui.js";
 import {
@@ -291,6 +292,7 @@ export function buildSynthesisPrompt(params: {
   livingDoc: string;
   lastCycleDate: string | null;
   cwd?: string;
+  capabilitiesSection?: string | null;
 }): string {
   const {
     cycleStart,
@@ -302,6 +304,7 @@ export function buildSynthesisPrompt(params: {
     livingDoc,
     lastCycleDate,
     cwd = process.cwd(),
+    capabilitiesSection,
   } = params;
 
   const agg = computeAggregates(sessions);
@@ -358,7 +361,7 @@ ${sessionTable}
 
 ## Reflection Answers
 ${reflectionLines}
-${capturesSection ? `\n## Notable Moments Captured This Cycle\n${capturesSection}` : ""}${contextLoadSection ? `\n${contextLoadSection}\n` : ""}${mcpSummary ? `\n${mcpSummary}\n` : ""}
+${capturesSection ? `\n## Notable Moments Captured This Cycle\n${capturesSection}` : ""}${contextLoadSection ? `\n${contextLoadSection}\n` : ""}${mcpSummary ? `\n${mcpSummary}\n` : ""}${capabilitiesSection ? `\n${capabilitiesSection}\n` : ""}
 ## Current Living Doc (AI Operating Constitution)
 \`\`\`
 ${livingDoc}
@@ -683,6 +686,9 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
   console.log(hr());
   console.log();
 
+  // ── 2.5. Fetch Claude capabilities (cached, silent on failure) ───────────
+  const capabilitiesSection = await fetchClaudeCapabilities(cwd);
+
   // ── 3. Claude API synthesis ───────────────────────────────────────────────
 
   const synthesisPrompt = buildSynthesisPrompt({
@@ -694,6 +700,7 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
     reflections: cycleReflections,
     livingDoc,
     lastCycleDate,
+    capabilitiesSection,
   });
 
   let synthesis: SynthesisResponse;
