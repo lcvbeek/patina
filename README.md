@@ -66,7 +66,9 @@ npm install -g @lcvbeek/patina
 
 ---
 
-## Team setup
+## Team setup (using git)
+
+**First, create an empty git repo.** This will just hold the data. JSON files – no code, no builds. GitHub, GitLab, wherever.
 
 **One person bootstraps:**
 
@@ -74,35 +76,40 @@ npm install -g @lcvbeek/patina
 cd your-project
 patina init --data-repo git@github.com:your-org/patina-data.git
 patina run                # onboarding questions; first layer auto-applied
-git diff PATINA.md
+git diff PATINA.md        # review your first PATINA.md
 git commit -am "First patina layer"
 ```
 
-`--data-repo` clones the shared data repo, writes `dataDir` to
-`.patina/config.json`, and enables automatic `git pull`/`push`. UUID-named
-files mean concurrent writes never collide.
+`--data-repo` clones the shared data repo into `~/.patina/data/<slug>/`,
+writes `dataDir` to `.patina/config.json`, and enables automatic
+`git pull`/`push`. UUID-named files mean concurrent writes never collide.
 
-**Everyone else clones and goes.** After `git pull`, `dataDir` syncs
-automatically on every `patina` command. No per-machine setup.
+**Each teammate runs the same command once** after pulling the project:
 
-Without `dataDir`, data stays local — fine for solo, but teammates' captures
-and reflections won't be included.
+```bash
+patina init --data-repo git@github.com:your-org/patina-data.git
+```
+
+From then on, `dataDir` syncs automatically on every `patina` command.
+
+Without `--data-repo`, data stays local — fine for solo, but teammates'
+captures and reflections won't be included.
 
 ---
 
 ## Commands
 
-| Command   | What it does                                                                                                                                            |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `init`    | Scaffold `.patina/` in the current directory, create `PATINA.md`. Use `--data-repo <url>` to clone a shared data repo; `--skill` to install the `/patina` Claude Code skill |
-| `capture` | Capture a notable moment while it's fresh. Use `--synth` for an immediate Claude interpretation without waiting for the next retro                      |
-| `reflect` | Answer reflection questions before the retro — saved locally, loaded by `patina run`. Press Enter to skip any question                                  |
-| `run`     | Run the retro — auto-ingests logs, loads all captures + reflections from the team, calls Claude for synthesis, applies the proposed change to `PATINA.md` |
-| `status`  | Show metrics: token spend, rework rate, tool usage, trends across cycles. Shows a breakdown by project so you can verify which repos are being included |
-| `layers`  | Visualise the patina the team has built — one ASCII layer per retro cycle. Shows 5 most recent by default; use `-n 10` for more or `-n 0` for all       |
-| `ask`     | Low-level command used by the `/patina` Claude Code skill — not intended for direct use                                                                 |
-| `ingest`  | Manually parse Claude Code logs (optional — `patina run` does this automatically)                                                                       |
-| `buff` / `apply` | _Deprecated._ `patina run` now applies changes automatically. Kept for backwards compatibility.                                                  |
+| Command          | What it does                                                                                                                                                                |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init`           | Scaffold `.patina/` in the current directory, create `PATINA.md`. Use `--data-repo <url>` to clone a shared data repo; `--skill` to install the `/patina` Claude Code skill |
+| `capture`        | Capture a notable moment while it's fresh. Use `--synth` for an immediate Claude interpretation without waiting for the next retro                                          |
+| `reflect`        | Answer reflection questions before the retro — saved locally, loaded by `patina run`. Press Enter to skip any question                                                      |
+| `run`            | Run the retro — auto-ingests logs, loads all captures + reflections from the team, calls Claude for synthesis, applies the proposed change to `PATINA.md`                   |
+| `status`         | Show metrics: token spend, rework rate, tool usage, trends across cycles. Shows a breakdown by project so you can verify which repos are being included                     |
+| `layers`         | Visualise the patina the team has built — one ASCII layer per retro cycle. Shows 5 most recent by default; use `-n 10` for more or `-n 0` for all                           |
+| `ask`            | Low-level command used by the `/patina` Claude Code skill — not intended for direct use                                                                                     |
+| `ingest`         | Manually parse Claude Code logs (optional — `patina run` does this automatically)                                                                                           |
+| `buff` / `apply` | _Deprecated._ `patina run` now applies changes automatically. Kept for backwards compatibility.                                                                             |
 
 ### patina init
 
@@ -317,11 +324,11 @@ anything outside `.patina/`.
 
 ## Why it's different
 
-|                | Where it lives        | Ownership          | Review          |
-| -------------- | --------------------- | ------------------ | --------------- |
-| `/insights`    | `~/.claude/`, solo    | One person         | None            |
-| `CLAUDE.md`    | In repo               | Whoever edits last | Sometimes       |
-| **`PATINA.md`** | In repo, loaded every session | Whole team | Always, via git diff |
+|                 | Where it lives                | Ownership          | Review               |
+| --------------- | ----------------------------- | ------------------ | -------------------- |
+| `/insights`     | `~/.claude/`, solo            | One person         | None                 |
+| `CLAUDE.md`     | In repo                       | Whoever edits last | Sometimes            |
+| **`PATINA.md`** | In repo, loaded every session | Whole team         | Always, via git diff |
 
 `/insights` produces a personal HTML report that disappears when the
 session ends. `CLAUDE.md` rots while nobody's watching. `PATINA.md`
