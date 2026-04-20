@@ -1,6 +1,6 @@
 {
   "name": "@lcvbeek/patina",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Shared AI instructions that compound over time",
   "type": "module",
   "main": "dist/index.js",
