@@ -2,13 +2,16 @@ import readline from "readline";
 import {
   assertInitialised,
   getLatestCycleDate,
+  readCaptures,
   readReflections,
   writeReflection,
+  type Capture,
   type Reflection,
 } from "../lib/storage.js";
 import { loadQuestions } from "../lib/questions.js";
 import { getGitAuthor } from "../lib/git.js";
 import { generateId } from "./capture.js";
+import { formatCapturesForDisplay } from "./reflect.js";
 
 // ---------------------------------------------------------------------------
 // ANSI helpers
@@ -70,6 +73,7 @@ export interface AskOptions {
 interface Context {
   questions: Question[];
   reflections: Reflection[];
+  captures: Capture[];
   author: string;
   lastCycleDate: string | null;
   remaining: number;
@@ -80,16 +84,29 @@ function loadContext(cwd: string): Context {
   const questions = loadQuestions(cwd);
   const lastCycleDate = getLatestCycleDate(cwd);
   const reflections = readReflections(cwd, lastCycleDate);
+  const captures = readCaptures(cwd, lastCycleDate);
   const author = getGitAuthor();
   const answered = answeredKeys(reflections, author);
   return {
     questions,
     reflections,
+    captures,
     author,
     lastCycleDate,
     remaining: questions.length - answered.size,
     total: questions.length,
   };
+}
+
+const CAPTURE_DISPLAY_LIMIT = 10;
+
+function printRecentCaptures(captures: Capture[]): void {
+  if (captures.length === 0) return;
+  console.log(dim(`Recent captures (${captures.length}):`));
+  for (const line of formatCapturesForDisplay(captures, CAPTURE_DISPLAY_LIMIT)) {
+    console.log(`  ${line}`);
+  }
+  console.log();
 }
 
 function resolveQuestion(ctx: Context, keyOverride?: string): Question | null {
@@ -143,6 +160,13 @@ export async function askCommand(options: AskOptions): Promise<void> {
         remaining: ctx.remaining,
         total: ctx.total,
         allDone: question === null,
+        captures: ctx.captures.slice(-CAPTURE_DISPLAY_LIMIT).map((c) => ({
+          id: c.id,
+          text: c.text,
+          tag: c.tag ?? null,
+          timestamp: c.timestamp,
+        })),
+        captureCount: ctx.captures.length,
       }),
     );
     return;
@@ -161,6 +185,7 @@ export async function askCommand(options: AskOptions): Promise<void> {
 
   // ---- --show: print the next question and exit --------------------------
   if (options.show) {
+    printRecentCaptures(ctx.captures);
     const progress = `[${ctx.total - ctx.remaining + 1}/${ctx.total}]`;
     console.log(`${dim(progress)} ${bold(question.text)}`);
     console.log(dim(`  key: ${question.key}`));
@@ -188,8 +213,10 @@ export async function askCommand(options: AskOptions): Promise<void> {
   }
 
   // ---- Interactive: print question, read stdin ----------------------------
+  console.log();
+  printRecentCaptures(ctx.captures);
   const progress = `[${ctx.total - ctx.remaining + 1}/${ctx.total}]`;
-  console.log(`\n${dim(progress)} ${bold(question.text)}`);
+  console.log(`${dim(progress)} ${bold(question.text)}`);
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
