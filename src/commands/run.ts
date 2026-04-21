@@ -412,6 +412,9 @@ async function callClaude(userMessage: string): Promise<SynthesisResponse> {
     "\n" +
     userMessage;
 
+  if (process.env.PATINA_DEBUG)
+    console.log("\n── synthesis prompt ──\n" + fullPrompt + "\n─────────────────────\n");
+
   return callClaudeForJson<SynthesisResponse>(fullPrompt);
 }
 
@@ -698,8 +701,6 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
     lastCycleDate,
     capabilitiesSection,
   });
-
-  if (process.env.PATINA_DEBUG) console.log("\n── synthesis prompt ──\n" + synthesisPrompt + "\n─────────────────────\n");
 
   let synthesis: SynthesisResponse;
   const stopSpinner = startSpinner("Sending to Claude for synthesis...");
