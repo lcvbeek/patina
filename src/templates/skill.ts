@@ -30,6 +30,7 @@ Parse \`$ARGUMENTS\` and run the matching Patina CLI command via Bash. If \`pati
 ### Behaviour rules
 
 - **Always use \`--json\` when you need to read back state.** For example, before recording an answer, run \`patina ask --json --show\` to confirm which question will be targeted, then \`patina ask --json --answer "<text>"\` to save it. Parse the JSON, surface the result to the user in plain language.
+- **Remind with recent captures.** \`patina ask --json --show\` returns a \`captures\` array (up to 10 most recent since the last cycle, plus a \`captureCount\` total). When the user runs \`/patina next\` or \`/patina reflect\` without context, briefly recap those captures first — one short bullet each with tag + date + gist — so they can ground their answer in what actually happened. Skip the recap silently if the array is empty.
 - **Quote answers safely.** Wrap user-supplied text in double quotes and escape existing double quotes so shell parsing is unambiguous.
 - **Never assume which question is being answered.** If the user says \`/patina reflect "Claude nailed it"\` without a key, let the CLI pick the next unanswered one and tell the user which question was recorded against.
 - **Be terse.** One or two lines of confirmation. No preamble.
@@ -59,7 +60,7 @@ Similarly, if the user shares a notable moment (near-miss / frustration / patter
 **You:** Run \`patina ask --json --answer "Claude handled the refactor cleanly, minimal rework"\`, parse the response, report: "✓ Recorded against \`went_well\`. 4 of 6 remaining."
 
 **User:** \`/patina next\`
-**You:** Run \`patina ask --json --show\`, report the question text and key.
+**You:** Run \`patina ask --json --show\`. If \`captures\` is non-empty, preface the question with a one-line recap like "Since your last cycle you captured: Apr 15 [near-miss] Claude almost force-pushed main; Apr 18 [went-well] refactor landed cleanly." Then report the question text and key.
 
 **User:** \`/patina capture near-miss: Claude almost force-pushed main\`
 **You:** Run \`patina capture --tag near-miss "Claude almost force-pushed main"\`, report success.

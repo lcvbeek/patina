@@ -4,8 +4,10 @@ import {
   getLatestCycleDate,
   getDataDir,
   readAllSessions,
+  readCaptures,
   readConfig,
   writeReflection,
+  type Capture,
   type Reflection,
 } from "../lib/storage.js";
 import { generateId } from "./capture.js";
@@ -35,6 +37,34 @@ function green(s: string): string {
 
 function hr(len = 60): string {
   return dim("─".repeat(len));
+}
+
+// ---------------------------------------------------------------------------
+// Capture display
+// ---------------------------------------------------------------------------
+
+/**
+ * Render the most recent captures as plain strings for terminal display.
+ * Shows up to `limit` entries, oldest first, with a trailing "… N more" when truncated.
+ */
+export function formatCapturesForDisplay(captures: Capture[], limit: number): string[] {
+  if (captures.length === 0) return [];
+
+  const shown = captures.slice(-limit);
+  const omitted = captures.length - shown.length;
+
+  const lines = shown.map((c) => {
+    const date = c.timestamp.slice(0, 10);
+    const tag = c.tag ? ` [${c.tag}]` : "";
+    const text = c.text.length > 120 ? c.text.slice(0, 117) + "…" : c.text;
+    return `- ${date}${tag}: ${text}`;
+  });
+
+  if (omitted > 0) {
+    lines.unshift(dim(`… ${omitted} older capture${omitted === 1 ? "" : "s"} not shown`));
+  }
+
+  return lines;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +106,7 @@ export async function reflectCommand(): Promise<void> {
     : allSessions;
 
   const totalTokens = cycleSessions.reduce((sum, s) => sum + s.estimated_tokens, 0);
+  const cycleCaptures = readCaptures(cwd, lastCycleDate);
 
   console.log(`\n${bold("patina reflect")} — record your reflections for the next retro`);
   console.log(hr());
@@ -84,6 +115,14 @@ export async function reflectCommand(): Promise<void> {
   }
   console.log(`  Sessions         : ${bold(String(cycleSessions.length))}`);
   console.log(`  Tokens (est.)    : ${bold(formatNumber(totalTokens))}`);
+  console.log(`  Captures         : ${bold(String(cycleCaptures.length))}`);
+  if (cycleCaptures.length > 0) {
+    console.log();
+    console.log(dim("Recent captures:"));
+    for (const line of formatCapturesForDisplay(cycleCaptures, 10)) {
+      console.log(`  ${line}`);
+    }
+  }
   console.log();
   console.log(
     dim("Answer each question. Press Enter to skip. Your responses feed into the next patina run."),
