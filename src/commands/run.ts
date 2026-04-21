@@ -34,7 +34,7 @@ import {
   trendArrow,
 } from "../lib/metrics.js";
 import type { SessionSummary } from "../lib/storage.js";
-import { estimateTextTokens, type TextTokenEstimate } from "../lib/token-estimate.js";
+import { estimateTextTokens, estimateTokensFromChars, type TextTokenEstimate } from "../lib/token-estimate.js";
 
 // ---------------------------------------------------------------------------
 // ANSI helpers (no extra deps)
@@ -423,29 +423,26 @@ function displaySynthesis(synthesis: SynthesisResponse): void {
   section("Cycle Summary");
   console.log(`  ${synthesis.cycle_summary}`);
 
-  section("Patterns Identified");
+  section("Patterns");
   if (synthesis.patterns.length === 0) {
-    console.log(dim("  No patterns identified."));
+    console.log(dim("  none"));
   } else {
-    for (let i = 0; i < synthesis.patterns.length; i++) {
-      const p = synthesis.patterns[i];
-      console.log(`\n  ${bold(`${i + 1}. ${p.pattern}`)}`);
-      console.log(`     ${dim("Frequency:")} ${p.frequency}`);
-      console.log(`     ${dim("Interpretation:")} ${p.interpretation}`);
+    for (const p of synthesis.patterns) {
+      console.log(`\n  ${bold(p.pattern)} ${dim(`· ${p.frequency}`)}`);
+      console.log(`  ${p.interpretation}`);
     }
   }
 
-  section("Coaching Insight");
+  section("Coaching");
   const ci = synthesis.coaching_insight;
-  console.log(`  ${bold("Observation:")} ${ci.observation}`);
-  console.log(`  ${bold("What it suggests:")} ${ci.what_it_suggests}`);
-  console.log(`\n  ${green(bold("One thing to try:"))} ${ci.one_thing_to_try}`);
+  console.log(`  ${ci.observation}`);
+  console.log(`  ${dim("→")} ${ci.what_it_suggests}`);
+  console.log(`\n  ${green("try:")} ${ci.one_thing_to_try}`);
 
-  section("Proposed Instruction Change");
+  section("Proposed Change");
   const pi = synthesis.proposed_instruction;
-  console.log(`  ${bold("Section:")} ${cyan(pi.section)}`);
-  console.log(`  ${bold("Rationale:")} ${pi.rationale}`);
-  console.log(`\n  ${bold("Proposed addition:")}`);
+  console.log(`  ${dim(pi.section)}  ${dim(`[${pi.action ?? "add"}]`)}`);
+  console.log(`  ${dim(pi.rationale)}`);
   const diffLines = pi.diff.split("\n");
   for (const line of diffLines) {
     console.log(`  ${green("+ " + line)}`);
@@ -454,9 +451,8 @@ function displaySynthesis(synthesis: SynthesisResponse): void {
   section("Opportunity");
   const opp = synthesis.opportunity;
   const effortColour = opp.effort === "low" ? green : opp.effort === "medium" ? yellow : cyan;
-  console.log(`  ${bold("Observation:")} ${opp.observation}`);
-  console.log(`  ${bold("Suggestion:")} ${opp.suggestion}`);
-  console.log(`  ${bold("Effort:")} ${effortColour(opp.effort)}`);
+  console.log(`  ${opp.observation}`);
+  console.log(`  ${dim("→")} ${opp.suggestion}  ${effortColour(opp.effort)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -703,12 +699,15 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
     capabilitiesSection,
   });
 
+  if (process.env.PATINA_DEBUG) console.log("\n── synthesis prompt ──\n" + synthesisPrompt + "\n─────────────────────\n");
+
   let synthesis: SynthesisResponse;
   const stopSpinner = startSpinner("Sending to Claude for synthesis...");
 
   try {
     synthesis = await callClaude(synthesisPrompt);
-    stopSpinner();
+    const tokens = estimateTokensFromChars(synthesisPrompt.length + JSON.stringify(synthesis).length);
+    stopSpinner(tokens);
   } catch (err) {
     stopSpinner();
     const msg = err instanceof Error ? err.message : String(err);

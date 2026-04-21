@@ -202,6 +202,19 @@ describe("callClaudeForJson", () => {
     expect(result).toEqual({ x: true });
   });
 
+  it("extracts JSON when Claude prefixes it with prose", async () => {
+    spawnMock.mockReturnValue(
+      makeChildProcess({
+        exitCode: 0,
+        stdoutData: 'Here is my analysis.\n\n```json\n{"insight": "test"}\n```',
+      }),
+    );
+    vi.resetModules();
+    const { callClaudeForJson } = await import("./claude.js");
+    const result = await callClaudeForJson<{ insight: string }>("prompt");
+    expect(result).toEqual({ insight: "test" });
+  });
+
   it("throws a descriptive error for invalid JSON responses", async () => {
     spawnMock.mockReturnValue(
       makeChildProcess({ exitCode: 0, stdoutData: "This is not JSON at all." }),

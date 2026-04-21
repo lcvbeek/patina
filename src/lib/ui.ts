@@ -7,7 +7,7 @@ function dim(s: string): string {
   return isTTY ? `\x1b[2m${s}\x1b[0m` : s;
 }
 
-export function startSpinner(message: string): () => void {
+export function startSpinner(message: string): (tokens?: number) => void {
   if (!isTTY) {
     process.stdout.write(message + "\n");
     return () => {};
@@ -22,8 +22,11 @@ export function startSpinner(message: string): () => void {
     );
     i++;
   }, 100);
-  return () => {
+  return (tokens?: number) => {
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     clearInterval(interval);
     process.stdout.write("\r" + " ".repeat(70) + "\r");
+    const tokenStr = tokens !== undefined ? `  ${dim(`~${tokens.toLocaleString()} tokens · ${elapsed}s`)}` : "";
+    if (tokenStr) process.stdout.write(tokenStr + "\n");
   };
 }

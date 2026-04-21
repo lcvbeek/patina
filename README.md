@@ -80,9 +80,10 @@ git diff PATINA.md        # review your first PATINA.md
 git commit -am "First patina layer"
 ```
 
-`--data-repo` clones the shared data repo into `~/.patina/data/<slug>/`,
-writes `dataDir` to `.patina/config.json`, and enables automatic
-`git pull`/`push`. UUID-named files mean concurrent writes never collide.
+`--data-repo` clones the shared data repo as a sibling directory
+(`../<repo-name>/`), writes a portable relative `dataDir` to
+`.patina/config.json`, and enables automatic `git pull`/`push`.
+UUID-named files mean concurrent writes never collide.
 
 **Each teammate runs the same command once** after pulling the project:
 
@@ -124,23 +125,23 @@ and adds `@.patina/PATINA.md` to `CLAUDE.md` (creating it if needed).
 
 - `--skill` installs the `/patina` Claude Code skill to `~/.claude/skills/patina/`
   so any team member can answer reflection questions from inside a Claude Code session.
-- `--data-repo <url>` clones the given git repo as `dataDir`, writes its path to
-  `.patina/config.json`, and enables automatic `git pull`/`push` sync on each
-  `patina` command — the easiest way to share captures, reflections, and sessions
-  across a team.
+- `--data-repo <url>` clones the given git repo as a sibling directory
+  (`../<repo-name>/`), writes a portable relative `dataDir` to `.patina/config.json`,
+  and enables automatic `git pull`/`push` sync on each `patina` command — the
+  easiest way to share captures, reflections, and sessions across a team.
 
 Safe to run once per project.
 
 ### patina capture
 
 ```bash
+patina capture          # interactive mode
 patina capture "agent almost pushed directly to main — need an approval gate rule"
 patina capture --tag near-miss "agent almost pushed directly to main"
 patina capture --synth "Claude tried to commit an API key"  # immediate synthesis
-patina capture          # interactive mode
 ```
 
-Tags: `near-miss` / `went-well` / `frustration` / `pattern` / `other`
+Tags: `near-miss` (`n`) / `went-well` (`w`) / `frustration` (`f`) / `pattern` (`p`) / `other` (`o`)
 
 Captures are UUID-named JSON files in `dataDir` — no merge conflicts,
 anyone can write anytime. Author comes from `git config user.name`.
@@ -236,14 +237,25 @@ lives outside the project repo. Default location, per machine:
 ```
 
 For team retros, set `dataDir` in `.patina/config.json` — or use
-`patina init --data-repo <url>` to have it set up for you. `~/` is
-expanded; other paths resolve relative to the project root.
+`patina init --data-repo <url>` to have it set up for you.
+
+`dataDir` supports three formats:
+
+```json
+{ "dataDir": "../patina-data" }        // relative to project root (recommended)
+{ "dataDir": "../../shared/retro" }    // deeper relative path — resolved from project root
+{ "dataDir": "~/my-patina-data" }      // home-directory expansion
+```
+
+Absolute paths work too. `patina init --data-repo` always writes a relative path.
+
+Example:
 
 ```json
 {
   "include": [],
   "exclude": [],
-  "dataDir": "../our-patina-data"
+  "dataDir": "../patina-data"
 }
 ```
 
@@ -264,7 +276,7 @@ When a team works across multiple repos sharing the same `PATINA.md`
 ```json
 {
   "include": ["my-backend", "my-frontend"],
-  "dataDir": "../our-patina-data"
+  "dataDir": "../patina-data"
 }
 ```
 
@@ -445,7 +457,7 @@ retro:
 {
   "include": ["api", "frontend"],
   "exclude": ["api-legacy"],
-  "dataDir": "../our-patina-data"
+  "dataDir": "../patina-data"
 }
 ```
 

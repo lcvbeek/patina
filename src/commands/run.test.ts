@@ -763,7 +763,7 @@ describe("runCommand", () => {
     expect(applyCommand).not.toHaveBeenCalled();
   });
 
-  it("logs 'No patterns identified' when synthesis returns empty patterns", async () => {
+  it("logs 'none' when synthesis returns empty patterns", async () => {
     const synthesisNoPatterns: SynthesisResponse = {
       ...MOCK_SYNTHESIS,
       patterns: [],
@@ -771,7 +771,7 @@ describe("runCommand", () => {
     vi.mocked(callClaudeForJson).mockResolvedValue(synthesisNoPatterns);
     await runCommand();
     const consoleCalls = vi.mocked(console.log).mock.calls.flat().join(" ");
-    expect(consoleCalls).toContain("No patterns identified");
+    expect(consoleCalls).toContain("none");
   });
 
   it("loads living doc with spoke files when they are present", async () => {

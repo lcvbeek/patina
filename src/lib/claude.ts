@@ -68,11 +68,24 @@ async function callViaApi(prompt: string): Promise<string> {
   return block.text.trim();
 }
 
-function stripFences(raw: string): string {
-  return raw
+function extractJson(raw: string): string {
+  // Fast path: already bare JSON
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return trimmed;
+
+  // Strip a single ```json ... ``` fence
+  const fenced = trimmed
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
+  if (fenced.startsWith("{") || fenced.startsWith("[")) return fenced;
+
+  // Claude prefixed the JSON with prose — extract the first {...} block
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start !== -1 && end > start) return raw.slice(start, end + 1);
+
+  return trimmed;
 }
 
 async function callClaude(prompt: string): Promise<string> {
@@ -135,7 +148,15 @@ export function patinaMdEditingRules(maxLines: number, maxChars: number): string
     "- Hard Guardrails: table row only — never expand a guardrail into prose\n" +
     "- One clause per bullet. Never explain or justify — rationale lives in the cycle report, not PATINA.md\n" +
     "- No hedging: never write 'try to', 'consider', 'where possible', 'ideally', or 'generally'\n" +
-    "- Compress aggressively: remove articles (a/the), use short labels, cut every unnecessary word to stay under cap\n\n" +
+    "- Compress aggressively: remove articles (a/the), use short labels, cut every unnecessary word to stay under cap\n" +
+    "- DISTIL, never transcribe: rewrite raw intent into compressed form — do not copy what the user said\n" +
+    "- Working Agreements format — WRONG: 'Stop and ask before: Starting any high-effort or high-cost task where requirements are still ambiguous; spawning any agent using a frontier model (e.g. Opus); taking any action that touches shared infrastructure.'\n" +
+    "- Working Agreements format — RIGHT: 'Pause: Confirm before ambiguous high-cost tasks, frontier model spawns, shared infra changes.'\n" +
+    "- Working Agreements format — WRONG: 'Tone: Lead with code. Show a concise summary of changed files, what was decided and why, and what was intentionally left out. End with optional follow-up questions.'\n" +
+    "- Working Agreements format — RIGHT: 'Tone: Lead with code. Flag affected callsites. Follow-up questions optional.'\n" +
+    "- Behavior Contract format — WRONG: 'Always confirm with the user before proceeding with any action that modifies files or runs commands that could have side effects.'\n" +
+    "- Behavior Contract format — RIGHT: 'Confirm plan before code; state scope in one sentence'\n" +
+    "The diff field must be machine-inference-optimised: short label, colon, imperative clause. No prose. No explanation.\n\n" +
     "MARKDOWN LINT RULES for the diff field:\n" +
     "- Lists must have a blank line before and after them\n" +
     '- Bold labels followed by a list need a blank line between (e.g. "**Always do:**\\n\\n- item")\n' +
@@ -150,7 +171,7 @@ export async function callClaudeForText(prompt: string): Promise<string> {
 
 export async function callClaudeForJson<T>(prompt: string): Promise<T> {
   const raw = await callClaude(prompt);
-  const jsonStr = stripFences(raw);
+  const jsonStr = extractJson(raw);
   try {
     return JSON.parse(jsonStr) as T;
   } catch {
