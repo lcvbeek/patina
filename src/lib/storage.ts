@@ -187,7 +187,7 @@ export const OPPORTUNITY_BACKLOG_TEMPLATE = `# Opportunity Backlog
 
 export const CYCLE_HISTORY_TEMPLATE = `# Retro Cycle History
 
-> Auto-populated by \`patina buff\`. Full cycle detail is preserved in .patina/cycles/.
+> Auto-populated by \`patina run\`. Full cycle detail is preserved in .patina/cycles/.
 
 | Cycle | Date | Key Insight | Change Made |
 |---|---|---|---|
@@ -353,7 +353,7 @@ export interface PatinaConfig {
    * Optional path to a shared data directory (resolved relative to cwd).
    * When set, sessions/reflections/captures/metrics are read from and written to this location.
    * Use this to share operational data with teammates via a dedicated repo or synced folder.
-   * Example: "../our-patina-data"
+   * Example: "../patina-data"  (set automatically by `patina init --data-repo <url>`)
    */
   dataDir?: string;
   /**

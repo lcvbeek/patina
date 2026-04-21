@@ -93,34 +93,22 @@ export interface InitOptions {
 // data-repo helper
 // ---------------------------------------------------------------------------
 
-/**
- * Derive a filesystem-safe slug from a git remote URL.
- * e.g. https://github.com/acme/retro-data.git → github-com-acme-retro-data
- */
-function repoUrlToSlug(url: string): string {
-  return url
-    .replace(/^(https?:\/\/|git@|ssh:\/\/)/, "")
-    .replace(/\.git$/, "")
-    .replace(/[/:@]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
 
 /**
- * Clone the remote repo into ~/.patina/data/<slug>, write .gitignore,
- * and update .patina/config.json with dataDir + dataDirSync: "git".
+ * Clone the remote repo as a sibling directory (../<repo-name>/), write .gitignore,
+ * and update .patina/config.json with a portable relative dataDir.
  */
 async function initDataRepo(repoUrl: string, cwd: string): Promise<void> {
-  const slug = repoUrlToSlug(repoUrl);
-  const clonePath = path.join(os.homedir(), ".patina", "data", slug);
+  const repoName = repoUrl.replace(/\.git$/, "").split("/").at(-1)!;
+  const clonePath = path.join(cwd, "..", repoName);
+  const relativeDataDir = `../${repoName}`;
 
   if (fs.existsSync(clonePath)) {
-    console.log(`\nData repo already cloned at ${clonePath}`);
+    console.log(`\nData repo already exists at ${clonePath}`);
     console.log(`Updating .patina/config.json to point at it.`);
   } else {
     console.log(`\nCloning ${repoUrl}`);
     console.log(`  → ${clonePath}\n`);
-    ensureDir(path.dirname(clonePath));
     const result = spawnSync("git", ["clone", repoUrl, clonePath], { stdio: "inherit" });
     if (result.status !== 0) {
       console.error(`\nError: git clone failed. Check the URL and your access permissions.`);
@@ -133,12 +121,11 @@ async function initDataRepo(repoUrl: string, cwd: string): Promise<void> {
   const existingConfig = readConfig(cwd);
   writeJson(path.join(cwd, PATINA_CONFIG_FILE), {
     ...existingConfig,
-    dataDir: clonePath,
-    dataDirSync: "git",
+    dataDir: relativeDataDir,
   });
 
   console.log(`\n  Data repo  ${clonePath}`);
-  console.log(`  Config     .patina/config.json  (dataDir + dataDirSync: "git")`);
+  console.log(`  Config     .patina/config.json  (dataDir: "${relativeDataDir}")`);
   console.log(`\nNext steps:`);
   console.log(`  patina ingest    — import your sessions and push to shared repo`);
   console.log(`  Share the repo URL with teammates: ${repoUrl}`);
@@ -163,7 +150,6 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 
   if (options.dataRepo) {
     await initDataRepo(options.dataRepo, cwd);
-    return;
   }
 
   if (patinaExists(cwd)) {

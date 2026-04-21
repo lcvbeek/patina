@@ -650,6 +650,22 @@ describe("getDataDir", () => {
     fs.rmSync(freshDir, { recursive: true, force: true });
     process.env.PATINA_DATA_DIR = tmpDir; // restore for afterEach
   });
+
+  it("resolves a relative dataDir from config against cwd", () => {
+    delete process.env.PATINA_DATA_DIR;
+    const projectDir = makeTmpDir();
+    const patinaDir = path.join(projectDir, ".patina");
+    fs.mkdirSync(patinaDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(patinaDir, "config.json"),
+      JSON.stringify({ include: [], dataDir: "../patina-data" }),
+      "utf-8",
+    );
+    const result = getDataDir(projectDir);
+    expect(result).toBe(path.resolve(projectDir, "../patina-data"));
+    fs.rmSync(projectDir, { recursive: true, force: true });
+    process.env.PATINA_DATA_DIR = tmpDir; // restore for afterEach
+  });
 });
 
 // ---------------------------------------------------------------------------
