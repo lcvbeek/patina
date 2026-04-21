@@ -619,6 +619,20 @@ describe("runCommand", () => {
     expect(promptArg.length).toBeGreaterThan(100);
   });
 
+  it("logs the full Claude prompt when PATINA_DEBUG is set", async () => {
+    process.env.PATINA_DEBUG = "1";
+    try {
+      await runCommand();
+    } finally {
+      delete process.env.PATINA_DEBUG;
+    }
+
+    const consoleCalls = vi.mocked(console.log).mock.calls.flat().join(" ");
+    expect(consoleCalls).toContain("ANALYST_PREAMBLE");
+    expect(consoleCalls).toContain("PATINA_RULES");
+    expect(consoleCalls).toContain("Output format (retro cycle synthesis)");
+  });
+
   it("writes the cycle file after successful Claude invocation", async () => {
     await runCommand();
     expect(writeCycleFile).toHaveBeenCalledOnce();
@@ -763,7 +777,7 @@ describe("runCommand", () => {
     expect(applyCommand).not.toHaveBeenCalled();
   });
 
-  it("logs 'No patterns identified' when synthesis returns empty patterns", async () => {
+  it("logs 'none' when synthesis returns empty patterns", async () => {
     const synthesisNoPatterns: SynthesisResponse = {
       ...MOCK_SYNTHESIS,
       patterns: [],
@@ -771,7 +785,7 @@ describe("runCommand", () => {
     vi.mocked(callClaudeForJson).mockResolvedValue(synthesisNoPatterns);
     await runCommand();
     const consoleCalls = vi.mocked(console.log).mock.calls.flat().join(" ");
-    expect(consoleCalls).toContain("No patterns identified");
+    expect(consoleCalls).toContain("none");
   });
 
   it("loads living doc with spoke files when they are present", async () => {

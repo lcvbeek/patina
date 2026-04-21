@@ -21,9 +21,11 @@ import {
 } from "../lib/storage.js";
 import { getGitAuthor } from "../lib/git.js";
 import { shouldSync, gitPush } from "../lib/data-dir-git.js";
+import { applyCommand } from "./apply.js";
 import { callClaudeForJson, ANALYST_PREAMBLE, patinaMdEditingRules } from "../lib/claude.js";
 import { startSpinner } from "../lib/ui.js";
 import { computeAggregates, formatNumber } from "../lib/metrics.js";
+import { estimateTokensFromChars } from "../lib/token-estimate.js";
 
 // ---------------------------------------------------------------------------
 // ANSI helpers
@@ -146,6 +148,8 @@ async function synthesiseCapture(capture: Capture, cwd: string): Promise<void> {
 
   const prompt = buildSynthesisPrompt(capture, recentCaptures, livingDoc, metricsSummary);
 
+  if (process.env.PATINA_DEBUG) console.log("\n── synthesis prompt ──\n" + prompt + "\n─────────────────────\n");
+
   console.log();
   const stopSpinner = startSpinner("Synthesising...");
 
@@ -163,7 +167,8 @@ async function synthesiseCapture(capture: Capture, cwd: string): Promise<void> {
   let response: CaptureInsight;
   try {
     response = await callClaudeForJson<CaptureInsight>(prompt);
-    stopSpinner();
+    const tokens = estimateTokensFromChars(prompt.length + JSON.stringify(response).length);
+    stopSpinner(tokens);
   } catch (err) {
     stopSpinner();
     const msg = err instanceof Error ? err.message : String(err);
@@ -171,9 +176,7 @@ async function synthesiseCapture(capture: Capture, cwd: string): Promise<void> {
     return;
   }
 
-  const title = "Insight";
-  console.log(`\n${bold(title)}`);
-  console.log(dim("─".repeat(title.length)));
+  console.log();
   for (const line of response.insight.split("\n")) {
     console.log(`  ${line}`);
   }
@@ -187,9 +190,7 @@ async function synthesiseCapture(capture: Capture, cwd: string): Promise<void> {
   };
   writePendingDiff(pendingDiff, cwd);
 
-  console.log(
-    `\n${dim("Instruction change queued →")} run ${bold("patina buff")} to review and apply.`,
-  );
+  await applyCommand({ yes: true });
 }
 
 export async function captureCommand(

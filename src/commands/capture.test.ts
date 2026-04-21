@@ -42,6 +42,10 @@ vi.mock("../lib/ui.js", async (importOriginal) => {
   return { ...actual, startSpinner: vi.fn(() => vi.fn()) };
 });
 
+vi.mock("./apply.js", () => ({
+  applyCommand: vi.fn(),
+}));
+
 vi.mock("../lib/metrics.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/metrics.js")>();
   return {
@@ -83,6 +87,7 @@ import {
 import { getGitAuthor } from "../lib/git.js";
 import { callClaudeForJson } from "../lib/claude.js";
 import { computeAggregates, formatNumber } from "../lib/metrics.js";
+import { applyCommand } from "./apply.js";
 import fs from "fs";
 
 // ---------------------------------------------------------------------------
@@ -498,12 +503,9 @@ describe("captureCommand with --synth flag", () => {
     consoleSpy.mockRestore();
   });
 
-  it("logs 'patina buff' hint after synthesis", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  it("calls applyCommand with yes:true after synthesis", async () => {
     await captureCommand("important event", { synth: true });
-    const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
-    expect(allLogs).toContain("patina buff");
-    consoleSpy.mockRestore();
+    expect(vi.mocked(applyCommand)).toHaveBeenCalledWith({ yes: true });
   });
 
   it("reads PATINA.md for living doc context", async () => {
