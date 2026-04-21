@@ -25,6 +25,7 @@ vi.mock("../lib/storage.js", async (importOriginal) => {
     readConfig: vi.fn(),
     readCaptures: vi.fn(),
     getLatestCycleDate: vi.fn(),
+    getDataDir: vi.fn(() => "/fake/data-dir"),
   };
 });
 
@@ -75,10 +76,12 @@ import {
   readConfig,
   readCaptures,
   getLatestCycleDate,
+  getDataDir,
 } from "../lib/storage.js";
 import { discoverProjects, parseConversationFile, cwdToSlug } from "../lib/parser.js";
 import { getGitAuthor } from "../lib/git.js";
 import type { SessionSummary } from "../lib/storage.js";
+import { shouldSync, gitPush } from "../lib/data-dir-git.js";
 import { captureCommand } from "./capture.js";
 import { suggestCaptureFromSessions } from "../lib/capture-triggers.js";
 
@@ -474,5 +477,79 @@ describe("ingestCommand", () => {
     } finally {
       interactiveSpy.mockRestore();
     }
+  });
+
+  it("calls gitPush when sessions were ingested and shouldSync is true", async () => {
+    vi.mocked(shouldSync).mockReturnValue(true);
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(false);
+
+    await ingestCommand();
+
+    expect(vi.mocked(gitPush)).toHaveBeenCalledWith("/fake/data-dir", expect.stringContaining("ingest:"));
+  });
+
+  it("does not call gitPush when nothing was ingested", async () => {
+    vi.mocked(shouldSync).mockReturnValue(true);
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession()]);
+    vi.mocked(sessionExists).mockReturnValue(true); // all skipped
+
+    await ingestCommand();
+
+    expect(vi.mocked(gitPush)).not.toHaveBeenCalled();
+  });
+
+  it("logs verbose skip message when skipping a duplicate in ingestCommand", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession({ session_id: "dup-session" })]);
+    vi.mocked(sessionExists).mockReturnValue(true);
+
+    await ingestCommand({ verbose: true });
+
+    const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
+    expect(allLogs).toContain("dup-session");
+    consoleSpy.mockRestore();
+  });
+
+  it("logs verbose ingest message when writing a new session in ingestCommand", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession({ session_id: "new-session", turn_count: 7 })]);
+    vi.mocked(sessionExists).mockReturnValue(false);
+
+    await ingestCommand({ verbose: true });
+
+    const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
+    expect(allLogs).toContain("new-session");
+    consoleSpy.mockRestore();
+  });
+
+  it("logs warn and counts error when writeSession throws in ingestCommand", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(discoverProjects).mockReturnValue([
+      { name: "proj", conversationFile: "/fake.jsonl" },
+    ]);
+    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession({ session_id: "fail-session" })]);
+    vi.mocked(sessionExists).mockReturnValue(false);
+    vi.mocked(writeSession).mockImplementationOnce(() => { throw new Error("disk full"); });
+
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    await ingestCommand();
+
+    const allLogs = consoleSpy.mock.calls.map((c) => c[0] as string).join("\n");
+    expect(allLogs).toContain("1 error(s)");
+    warnSpy.mockRestore();
+    consoleSpy.mockRestore();
   });
 });

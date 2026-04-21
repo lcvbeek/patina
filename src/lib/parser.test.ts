@@ -1,12 +1,14 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { writeFileSync, unlinkSync } from "fs";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { writeFileSync, unlinkSync, mkdirSync, rmSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
+import { join, basename } from "path";
 import {
   detectRework,
   extractTextFromContent,
   extractToolName,
   parseConversationFile,
+  discoverProjects,
+  cwdToSlug,
 } from "./parser.js";
 
 // ---------------------------------------------------------------------------
@@ -374,5 +376,111 @@ describe("parseConversationFile", () => {
     expect(session.contextSnapshot).toBeDefined();
     expect(session.contextSnapshot!.mcpServers).toEqual(["computer-use"]);
     expect(session.contextSnapshot!.systemPromptTokens).toBe(30000);
+  });
+
+  it("uses the filename as session_id when no sessionId field is present", () => {
+    const file = writeTmp([
+      { type: "message", message: { role: "user", content: "hello" } },
+      { type: "message", message: { role: "assistant", content: "hi" } },
+    ]);
+    const sessions = parseConversationFile(file, "proj");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].session_id).toBe(basename(file, ".jsonl"));
+    expect(sessions[0].turn_count).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cwdToSlug
+// ---------------------------------------------------------------------------
+
+describe("cwdToSlug", () => {
+  it("converts an absolute path to a Claude Code slug", () => {
+    expect(cwdToSlug("/Users/leo/Git/patina")).toBe("-Users-leo-Git-patina");
+  });
+
+  it("handles a single-segment path", () => {
+    expect(cwdToSlug("/projects")).toBe("-projects");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// discoverProjects
+// ---------------------------------------------------------------------------
+
+describe("discoverProjects", () => {
+  let baseDir: string;
+
+  beforeEach(() => {
+    baseDir = join(tmpdir(), `patina-discover-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(baseDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(baseDir, { recursive: true, force: true });
+  });
+
+  it("returns empty array when base directory does not exist", () => {
+    expect(discoverProjects("/nonexistent/path/xyz")).toEqual([]);
+  });
+
+  it("returns empty array when base dir is empty", () => {
+    expect(discoverProjects(baseDir)).toEqual([]);
+  });
+
+  it("discovers a project with a .jsonl file", () => {
+    const projectDir = join(baseDir, "-Users-leo-Git-myproject");
+    mkdirSync(projectDir);
+    writeFileSync(join(projectDir, "conversations.jsonl"), "", "utf-8");
+
+    const result = discoverProjects(baseDir);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("-Users-leo-Git-myproject");
+    expect(result[0].conversationFile).toContain("conversations.jsonl");
+  });
+
+  it("ignores entries that are not directories", () => {
+    writeFileSync(join(baseDir, "somefile.txt"), "", "utf-8");
+    expect(discoverProjects(baseDir)).toEqual([]);
+  });
+
+  it("returns one entry per .jsonl file in a project directory", () => {
+    const projectDir = join(baseDir, "-Users-leo-project");
+    mkdirSync(projectDir);
+    writeFileSync(join(projectDir, "session-a.jsonl"), "", "utf-8");
+    writeFileSync(join(projectDir, "session-b.jsonl"), "", "utf-8");
+
+    const result = discoverProjects(baseDir);
+    expect(result).toHaveLength(2);
+  });
+
+  it("includes a project when its name matches includeSlugs", () => {
+    const projectDir = join(baseDir, "-Users-leo-Git-patina");
+    mkdirSync(projectDir);
+    writeFileSync(join(projectDir, "conversations.jsonl"), "", "utf-8");
+
+    const result = discoverProjects(baseDir, ["patina"]);
+    expect(result).toHaveLength(1);
+  });
+
+  it("excludes a project when its name matches excludeSlugs", () => {
+    const kept = join(baseDir, "-Users-leo-kept");
+    const excluded = join(baseDir, "-Users-leo-excluded");
+    mkdirSync(kept);
+    mkdirSync(excluded);
+    writeFileSync(join(kept, "conversations.jsonl"), "", "utf-8");
+    writeFileSync(join(excluded, "conversations.jsonl"), "", "utf-8");
+
+    const result = discoverProjects(baseDir, undefined, ["excluded"]);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("-Users-leo-kept");
+  });
+
+  it("returns empty array when includeSlugs filters out all projects", () => {
+    const projectDir = join(baseDir, "-Users-leo-project");
+    mkdirSync(projectDir);
+    writeFileSync(join(projectDir, "conversations.jsonl"), "", "utf-8");
+
+    expect(discoverProjects(baseDir, ["nonexistent-slug"])).toEqual([]);
   });
 });

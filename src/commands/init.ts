@@ -10,6 +10,7 @@ import {
   OPPORTUNITY_BACKLOG_FILE,
   OPPORTUNITY_BACKLOG_TEMPLATE,
   PATINA_CONFIG_FILE,
+  QUESTIONS_FILE,
   getDataDir,
   readConfig,
   patinaExists,
@@ -17,6 +18,7 @@ import {
   writeJson,
   ensureSpokeFiles,
 } from "../lib/storage.js";
+import { PUBLIC_QUESTIONS } from "../lib/questions.js";
 import { cwdToSlug } from "../lib/parser.js";
 import { estimateTextTokens } from "../lib/token-estimate.js";
 import { PATINA_SKILL_TEMPLATE } from "../templates/skill.js";
@@ -216,6 +218,12 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     fs.writeFileSync(backlogPath, OPPORTUNITY_BACKLOG_TEMPLATE, "utf-8");
   }
 
+  // Scaffold questions.json with the defaults (edit to customise)
+  const questionsPath = path.join(cwd, QUESTIONS_FILE);
+  if (!fs.existsSync(questionsPath)) {
+    fs.writeFileSync(questionsPath, JSON.stringify(PUBLIC_QUESTIONS, null, 2) + "\n", "utf-8");
+  }
+
   // Create PATINA.md (slim core — spoke files hold sections 4-7)
   const livingDocPath = path.join(cwd, LIVING_DOC_FILE);
   fs.writeFileSync(livingDocPath, LIVING_DOC_TEMPLATE, "utf-8");
@@ -252,6 +260,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   console.log(
     `  Created  ${OPPORTUNITY_BACKLOG_FILE}  (opportunity backlog — grows with each cycle)`,
   );
+  console.log(`  Created  ${QUESTIONS_FILE}  (reflect questions — edit to customise)`);
   console.log(`  Created  .patina/context/  (spoke files — loaded on demand)`);
   console.log(
     `  Created  ${PATINA_CONFIG_FILE}  (add slugs to "include"; set "dataDir" for team sharing)`,
