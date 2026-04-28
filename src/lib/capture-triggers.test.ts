@@ -22,7 +22,9 @@ describe("suggestCaptureFromSessions", () => {
   });
 
   it("returns null when no signals are present", () => {
-    expect(suggestCaptureFromSessions([makeSession(), makeSession({ session_id: "s2" })])).toBeNull();
+    expect(
+      suggestCaptureFromSessions([makeSession(), makeSession({ session_id: "s2" })]),
+    ).toBeNull();
   });
 
   // ── Rework detection ────────────────────────────────────────────────────────

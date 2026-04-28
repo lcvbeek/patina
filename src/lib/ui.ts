@@ -26,7 +26,8 @@ export function startSpinner(message: string): (tokens?: number) => void {
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     clearInterval(interval);
     process.stdout.write("\r" + " ".repeat(70) + "\r");
-    const tokenStr = tokens !== undefined ? `  ${dim(`~${tokens.toLocaleString()} tokens · ${elapsed}s`)}` : "";
+    const tokenStr =
+      tokens !== undefined ? `  ${dim(`~${tokens.toLocaleString()} tokens · ${elapsed}s`)}` : "";
     if (tokenStr) process.stdout.write(tokenStr + "\n");
   };
 }

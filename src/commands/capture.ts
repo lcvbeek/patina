@@ -148,7 +148,8 @@ async function synthesiseCapture(capture: Capture, cwd: string): Promise<void> {
 
   const prompt = buildSynthesisPrompt(capture, recentCaptures, livingDoc, metricsSummary);
 
-  if (process.env.PATINA_DEBUG) console.log("\n── synthesis prompt ──\n" + prompt + "\n─────────────────────\n");
+  if (process.env.PATINA_DEBUG)
+    console.log("\n── synthesis prompt ──\n" + prompt + "\n─────────────────────\n");
 
   console.log();
   const stopSpinner = startSpinner("Synthesising...");

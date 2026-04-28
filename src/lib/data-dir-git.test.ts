@@ -24,9 +24,7 @@ function mockSpawn(status: number, stderr = ""): ReturnType<typeof vi.fn> {
   } as any);
 }
 
-function mockSpawnSequence(
-  calls: Array<{ status: number; stderr?: string }>,
-): void {
+function mockSpawnSequence(calls: Array<{ status: number; stderr?: string }>): void {
   let callIndex = 0;
   vi.mocked(spawnSync).mockImplementation(() => {
     const call = calls[callIndex] ?? { status: 0 };

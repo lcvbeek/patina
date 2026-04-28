@@ -412,7 +412,10 @@ describe("discoverProjects", () => {
   let baseDir: string;
 
   beforeEach(() => {
-    baseDir = join(tmpdir(), `patina-discover-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    baseDir = join(
+      tmpdir(),
+      `patina-discover-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     mkdirSync(baseDir, { recursive: true });
   });
 

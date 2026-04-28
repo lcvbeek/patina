@@ -87,11 +87,7 @@ describe("loadQuestions", () => {
   });
 
   it("falls back to defaults when JSON is malformed", () => {
-    fs.writeFileSync(
-      path.join(tmpDir, ".patina", "questions.json"),
-      "{ this is not json",
-      "utf-8",
-    );
+    fs.writeFileSync(path.join(tmpDir, ".patina", "questions.json"), "{ this is not json", "utf-8");
     expect(loadQuestions(tmpDir)).toBe(PUBLIC_QUESTIONS);
   });
 });

@@ -28,9 +28,10 @@ describe("formatCapturesForDisplay", () => {
   it("truncates long capture text and appends an ellipsis", () => {
     const longText = "x".repeat(130);
 
-    const lines = formatCapturesForDisplay([
-      makeCapture(1, { text: longText, tag: "pattern" }),
-    ], 10);
+    const lines = formatCapturesForDisplay(
+      [makeCapture(1, { text: longText, tag: "pattern" })],
+      10,
+    );
 
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("- 2026-01-01 [pattern]: ");

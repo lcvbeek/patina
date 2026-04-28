@@ -16,10 +16,7 @@ export interface GitSyncResult {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function run(
-  args: string[],
-  cwd: string,
-): { status: number | null; stderr: string } {
+function run(args: string[], cwd: string): { status: number | null; stderr: string } {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
   return {
     status: result.status,

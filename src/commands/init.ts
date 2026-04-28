@@ -95,13 +95,15 @@ export interface InitOptions {
 // data-repo helper
 // ---------------------------------------------------------------------------
 
-
 /**
  * Clone the remote repo as a sibling directory (../<repo-name>/), write .gitignore,
  * and update .patina/config.json with a portable relative dataDir.
  */
 async function initDataRepo(repoUrl: string, cwd: string): Promise<void> {
-  const repoName = repoUrl.replace(/\.git$/, "").split("/").slice(-1)[0]!;
+  const repoName = repoUrl
+    .replace(/\.git$/, "")
+    .split("/")
+    .slice(-1)[0]!;
   const clonePath = path.join(cwd, "..", repoName);
   const relativeDataDir = `../${repoName}`;
 

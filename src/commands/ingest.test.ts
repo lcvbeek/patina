@@ -489,7 +489,10 @@ describe("ingestCommand", () => {
 
     await ingestCommand();
 
-    expect(vi.mocked(gitPush)).toHaveBeenCalledWith("/fake/data-dir", expect.stringContaining("ingest:"));
+    expect(vi.mocked(gitPush)).toHaveBeenCalledWith(
+      "/fake/data-dir",
+      expect.stringContaining("ingest:"),
+    );
   });
 
   it("does not call gitPush when nothing was ingested", async () => {
@@ -510,7 +513,9 @@ describe("ingestCommand", () => {
     vi.mocked(discoverProjects).mockReturnValue([
       { name: "proj", conversationFile: "/fake.jsonl" },
     ]);
-    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession({ session_id: "dup-session" })]);
+    vi.mocked(parseConversationFile).mockReturnValue([
+      makeParsedSession({ session_id: "dup-session" }),
+    ]);
     vi.mocked(sessionExists).mockReturnValue(true);
 
     await ingestCommand({ verbose: true });
@@ -525,7 +530,9 @@ describe("ingestCommand", () => {
     vi.mocked(discoverProjects).mockReturnValue([
       { name: "proj", conversationFile: "/fake.jsonl" },
     ]);
-    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession({ session_id: "new-session", turn_count: 7 })]);
+    vi.mocked(parseConversationFile).mockReturnValue([
+      makeParsedSession({ session_id: "new-session", turn_count: 7 }),
+    ]);
     vi.mocked(sessionExists).mockReturnValue(false);
 
     await ingestCommand({ verbose: true });
@@ -540,9 +547,13 @@ describe("ingestCommand", () => {
     vi.mocked(discoverProjects).mockReturnValue([
       { name: "proj", conversationFile: "/fake.jsonl" },
     ]);
-    vi.mocked(parseConversationFile).mockReturnValue([makeParsedSession({ session_id: "fail-session" })]);
+    vi.mocked(parseConversationFile).mockReturnValue([
+      makeParsedSession({ session_id: "fail-session" }),
+    ]);
     vi.mocked(sessionExists).mockReturnValue(false);
-    vi.mocked(writeSession).mockImplementationOnce(() => { throw new Error("disk full"); });
+    vi.mocked(writeSession).mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
 
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     await ingestCommand();

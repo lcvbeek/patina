@@ -34,7 +34,11 @@ import {
   trendArrow,
 } from "../lib/metrics.js";
 import type { SessionSummary } from "../lib/storage.js";
-import { estimateTextTokens, estimateTokensFromChars, type TextTokenEstimate } from "../lib/token-estimate.js";
+import {
+  estimateTextTokens,
+  estimateTokensFromChars,
+  type TextTokenEstimate,
+} from "../lib/token-estimate.js";
 
 // ---------------------------------------------------------------------------
 // ANSI helpers (no extra deps)
@@ -707,7 +711,9 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
 
   try {
     synthesis = await callClaude(synthesisPrompt);
-    const tokens = estimateTokensFromChars(synthesisPrompt.length + JSON.stringify(synthesis).length);
+    const tokens = estimateTokensFromChars(
+      synthesisPrompt.length + JSON.stringify(synthesis).length,
+    );
     stopSpinner(tokens);
   } catch (err) {
     stopSpinner();

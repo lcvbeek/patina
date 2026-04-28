@@ -2,7 +2,11 @@ import { describe, it, expect, afterEach } from "vitest";
 import { writeFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { extractContextSnapshot, modelContextWindow, systemPromptSizeLabel } from "./context-snapshot.js";
+import {
+  extractContextSnapshot,
+  modelContextWindow,
+  systemPromptSizeLabel,
+} from "./context-snapshot.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

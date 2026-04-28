@@ -86,7 +86,7 @@ function percentageLabel(tokens: number, windowSize: number): SystemPromptLabel 
   if (pct < 0.025) return "Lean";
   if (pct < 0.075) return "Moderate";
   if (pct < 0.15) return "Full";
-  if (pct < 0.30) return "Heavy";
+  if (pct < 0.3) return "Heavy";
   return "Very heavy";
 }
 
