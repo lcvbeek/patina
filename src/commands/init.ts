@@ -101,7 +101,7 @@ export interface InitOptions {
  * and update .patina/config.json with a portable relative dataDir.
  */
 async function initDataRepo(repoUrl: string, cwd: string): Promise<void> {
-  const repoName = repoUrl.replace(/\.git$/, "").split("/").at(-1)!;
+  const repoName = repoUrl.replace(/\.git$/, "").split("/").slice(-1)[0]!;
   const clonePath = path.join(cwd, "..", repoName);
   const relativeDataDir = `../${repoName}`;
 
