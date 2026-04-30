@@ -1,4 +1,4 @@
-import type { SessionSummary } from "./storage.js";
+import type { SessionSummary, Metrics } from "./storage.js";
 
 // ---------------------------------------------------------------------------
 // Aggregate metrics calculated from a set of session summaries
@@ -132,4 +132,82 @@ export function trendArrow(delta: number | null): string {
   if (delta > 0) return `▲ +${delta}%`;
   if (delta < 0) return `▼ ${delta}%`;
   return "→ 0%";
+}
+
+// ---------------------------------------------------------------------------
+// Cycle ROI estimation
+// ---------------------------------------------------------------------------
+
+export interface CycleRoiEntry {
+  date: string;
+  overhead_tokens: number;
+  rework_rate_pct: number;
+  rework_delta_pp: number | null;
+  est_sessions_avoided: number | null;
+  est_tokens_saved: number | null;
+  net_tokens: number | null;
+}
+
+export interface CycleRoiEstimate {
+  latest: CycleRoiEntry | null;
+  history: CycleRoiEntry[];
+  has_enough_data: boolean;
+}
+
+export function computeCycleRoi(
+  metrics: Metrics,
+  avgTokensPerSession: number,
+): CycleRoiEstimate {
+  const sorted = [...metrics.cycles].sort((a, b) => a.cycle_id.localeCompare(b.cycle_id));
+
+  if (sorted.length === 0) {
+    return { latest: null, history: [], has_enough_data: false };
+  }
+
+  const history: CycleRoiEntry[] = sorted.map((cycle, idx) => {
+    const synthesisTokens = cycle.synthesis_tokens ?? 0;
+    const patinaMdTokens = cycle.patina_md_tokens ?? 0;
+    const overhead_tokens = synthesisTokens + patinaMdTokens * cycle.session_count;
+
+    const rework_rate_pct =
+      cycle.session_count > 0
+        ? Math.round((cycle.rework_count / cycle.session_count) * 100)
+        : 0;
+
+    const prev = idx > 0 ? sorted[idx - 1] : null;
+    const prev_rework_rate_pct =
+      prev != null && prev.session_count > 0
+        ? Math.round((prev.rework_count / prev.session_count) * 100)
+        : null;
+
+    const rework_delta_pp =
+      prev_rework_rate_pct !== null ? rework_rate_pct - prev_rework_rate_pct : null;
+
+    let est_sessions_avoided: number | null = null;
+    let est_tokens_saved: number | null = null;
+    let net_tokens: number | null = null;
+
+    if (rework_delta_pp !== null && rework_delta_pp < 0 && avgTokensPerSession > 0) {
+      est_sessions_avoided =
+        Math.round(((-rework_delta_pp / 100) * cycle.session_count) * 10) / 10;
+      est_tokens_saved = Math.round(est_sessions_avoided * avgTokensPerSession * 2);
+      net_tokens = est_tokens_saved - overhead_tokens;
+    }
+
+    return {
+      date: cycle.cycle_id,
+      overhead_tokens,
+      rework_rate_pct,
+      rework_delta_pp,
+      est_sessions_avoided,
+      est_tokens_saved,
+      net_tokens,
+    };
+  });
+
+  return {
+    latest: history[history.length - 1] ?? null,
+    history,
+    has_enough_data: sorted.length >= 2,
+  };
 }

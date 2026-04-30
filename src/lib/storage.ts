@@ -254,6 +254,8 @@ export const MetricsSchema = z.object({
       session_count: z.number(),
       total_tokens: z.number(),
       rework_count: z.number(),
+      synthesis_tokens: z.number().optional(),
+      patina_md_tokens: z.number().optional(),
     }),
   ),
 });
@@ -338,6 +340,12 @@ export function readMetrics(cwd = process.cwd()): Metrics {
 export function writeMetrics(metrics: Metrics, cwd = process.cwd()): void {
   const validated = MetricsSchema.parse(metrics);
   writeJson(path.join(getDataDir(cwd), "metrics.json"), validated);
+}
+
+export function readPatinaDocTokens(cwd = process.cwd()): number {
+  const file = path.join(cwd, LIVING_DOC_FILE);
+  if (!fs.existsSync(file)) return 0;
+  return Math.ceil(fs.readFileSync(file, "utf-8").length / 4);
 }
 
 // ---------------------------------------------------------------------------

@@ -13,6 +13,9 @@ import {
   getLatestCycleDate,
   loadSpokeFiles,
   loadOpportunityBacklog,
+  readMetrics,
+  writeMetrics,
+  readPatinaDocTokens,
   CORE_MAX_LINES,
   CORE_MAX_CHARS,
   type PendingDiff,
@@ -408,7 +411,9 @@ Please analyse the above and respond with a JSON object matching this exact Type
 // Call Claude API
 // ---------------------------------------------------------------------------
 
-async function callClaude(userMessage: string): Promise<SynthesisResponse> {
+async function callClaude(
+  userMessage: string,
+): Promise<{ synthesis: SynthesisResponse; tokens: number }> {
   const fullPrompt =
     ANALYST_PREAMBLE +
     "\nOutput format (retro cycle synthesis): respond with a JSON object — no markdown wrapper, raw JSON only.\n\n" +
@@ -419,7 +424,8 @@ async function callClaude(userMessage: string): Promise<SynthesisResponse> {
   if (process.env.PATINA_DEBUG)
     console.log("\n── synthesis prompt ──\n" + fullPrompt + "\n─────────────────────\n");
 
-  return callClaudeForJson<SynthesisResponse>(fullPrompt);
+  const { result, tokens } = await callClaudeForJson<SynthesisResponse>(fullPrompt);
+  return { synthesis: result, tokens };
 }
 
 // ---------------------------------------------------------------------------
@@ -707,14 +713,14 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
   });
 
   let synthesis: SynthesisResponse;
+  let synthesisTokens = 0;
   const stopSpinner = startSpinner("Sending to Claude for synthesis...");
 
   try {
-    synthesis = await callClaude(synthesisPrompt);
-    const tokens = estimateTokensFromChars(
-      synthesisPrompt.length + JSON.stringify(synthesis).length,
-    );
-    stopSpinner(tokens);
+    const callResult = await callClaude(synthesisPrompt);
+    synthesis = callResult.synthesis;
+    synthesisTokens = callResult.tokens;
+    stopSpinner(synthesisTokens);
   } catch (err) {
     stopSpinner();
     const msg = err instanceof Error ? err.message : String(err);
@@ -753,6 +759,24 @@ export async function runCommand(options: { onboard?: boolean } = {}): Promise<v
   };
 
   writePendingDiff(pendingDiff, cwd);
+
+  // Update metrics with synthesis cost for cycle ROI tracking
+  const metrics = readMetrics(cwd);
+  const cycleAgg = computeAggregates(sessionsForCycle);
+  const patinaDocTokens = readPatinaDocTokens(cwd);
+  const updatedCycleEntry = {
+    cycle_id: today,
+    created_at: new Date().toISOString(),
+    session_count: sessionsForCycle.length,
+    total_tokens: cycleAgg.total_tokens,
+    rework_count: cycleAgg.rework_sessions,
+    synthesis_tokens: synthesisTokens,
+    patina_md_tokens: patinaDocTokens,
+  };
+  const updatedCycles = metrics.cycles.some((c) => c.cycle_id === today)
+    ? metrics.cycles.map((c) => (c.cycle_id === today ? updatedCycleEntry : c))
+    : [...metrics.cycles, updatedCycleEntry];
+  writeMetrics({ ...metrics, last_updated: new Date().toISOString(), cycles: updatedCycles }, cwd);
 
   // ── 6. Auto-apply proposed instruction change ─────────────────────────────
 

@@ -178,7 +178,7 @@ describe("callClaudeForJson", () => {
     spawnMock.mockReturnValue(makeChildProcess({ exitCode: 0, stdoutData: '{"key": "value"}' }));
     vi.resetModules();
     const { callClaudeForJson } = await import("./claude.js");
-    const result = await callClaudeForJson<{ key: string }>("prompt");
+    const { result } = await callClaudeForJson<{ key: string }>("prompt");
     expect(result).toEqual({ key: "value" });
   });
 
@@ -188,7 +188,7 @@ describe("callClaudeForJson", () => {
     );
     vi.resetModules();
     const { callClaudeForJson } = await import("./claude.js");
-    const result = await callClaudeForJson<{ n: number }>("prompt");
+    const { result } = await callClaudeForJson<{ n: number }>("prompt");
     expect(result).toEqual({ n: 1 });
   });
 
@@ -198,7 +198,7 @@ describe("callClaudeForJson", () => {
     );
     vi.resetModules();
     const { callClaudeForJson } = await import("./claude.js");
-    const result = await callClaudeForJson<{ x: boolean }>("prompt");
+    const { result } = await callClaudeForJson<{ x: boolean }>("prompt");
     expect(result).toEqual({ x: true });
   });
 
@@ -211,7 +211,7 @@ describe("callClaudeForJson", () => {
     );
     vi.resetModules();
     const { callClaudeForJson } = await import("./claude.js");
-    const result = await callClaudeForJson<{ insight: string }>("prompt");
+    const { result } = await callClaudeForJson<{ insight: string }>("prompt");
     expect(result).toEqual({ insight: "test" });
   });
 

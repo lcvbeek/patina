@@ -23,7 +23,7 @@ function claudeCliAvailable(): boolean {
   return claudeCliAvailableCache;
 }
 
-function callViaCli(prompt: string): Promise<string> {
+function callViaCli(prompt: string): Promise<ApiResult> {
   return new Promise((resolve, reject) => {
     const child = spawn("claude", ["-p", "--output-format", "text", "--model", "sonnet"], {
       stdio: ["pipe", "pipe", "pipe"],
@@ -45,13 +45,22 @@ function callViaCli(prompt: string): Promise<string> {
         const stderr = Buffer.concat(stderrChunks).toString("utf8");
         reject(new Error(stderr || "Claude CLI exited with non-zero status"));
       } else {
-        resolve(Buffer.concat(stdoutChunks).toString("utf8").trim());
+        const raw = Buffer.concat(stdoutChunks).toString("utf8").trim();
+        resolve({
+          text: raw,
+          tokens: Math.ceil((prompt.length + raw.length) / 4),
+        });
       }
     });
   });
 }
 
-async function callViaApi(prompt: string): Promise<string> {
+interface ApiResult {
+  text: string;
+  tokens: number;
+}
+
+async function callViaApi(prompt: string): Promise<ApiResult> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const message = await client.messages.create({
@@ -65,7 +74,10 @@ async function callViaApi(prompt: string): Promise<string> {
     throw new Error("Unexpected response type from Anthropic API");
   }
 
-  return block.text.trim();
+  return {
+    text: block.text.trim(),
+    tokens: message.usage.input_tokens + message.usage.output_tokens,
+  };
 }
 
 function extractJson(raw: string): string {
@@ -88,7 +100,7 @@ function extractJson(raw: string): string {
   return trimmed;
 }
 
-async function callClaude(prompt: string): Promise<string> {
+async function callClaude(prompt: string): Promise<ApiResult> {
   if (claudeCliAvailable()) {
     return callViaCli(prompt);
   } else if (process.env.ANTHROPIC_API_KEY) {
@@ -166,14 +178,15 @@ export function patinaMdEditingRules(maxLines: number, maxChars: number): string
 }
 
 export async function callClaudeForText(prompt: string): Promise<string> {
-  return callClaude(prompt);
+  const { text } = await callClaude(prompt);
+  return text;
 }
 
-export async function callClaudeForJson<T>(prompt: string): Promise<T> {
-  const raw = await callClaude(prompt);
+export async function callClaudeForJson<T>(prompt: string): Promise<{ result: T; tokens: number }> {
+  const { text: raw, tokens } = await callClaude(prompt);
   const jsonStr = extractJson(raw);
   try {
-    return JSON.parse(jsonStr) as T;
+    return { result: JSON.parse(jsonStr) as T, tokens };
   } catch {
     throw new Error(
       `Could not parse Claude response as JSON.\n\nRaw response:\n${raw.slice(0, 500)}`,

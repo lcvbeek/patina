@@ -24,6 +24,9 @@ vi.mock("../lib/storage.js", async (importOriginal) => {
     getLatestCycleDate: vi.fn(),
     loadSpokeFiles: vi.fn(() => ""),
     loadOpportunityBacklog: vi.fn(() => null),
+    readMetrics: vi.fn(() => ({ last_updated: "", cycles: [] })),
+    writeMetrics: vi.fn(),
+    readPatinaDocTokens: vi.fn(() => 0),
     LIVING_DOC_FILE: ".patina/PATINA.md",
     CORE_MAX_LINES: 80,
     CORE_MAX_CHARS: 3200,
@@ -561,7 +564,7 @@ describe("runCommand", () => {
     vi.mocked(writeCycleFile).mockImplementation(() => {});
     vi.mocked(loadSpokeFiles).mockReturnValue("");
     vi.mocked(loadOpportunityBacklog).mockReturnValue(null);
-    vi.mocked(callClaudeForJson).mockResolvedValue(MOCK_SYNTHESIS);
+    vi.mocked(callClaudeForJson).mockResolvedValue({ result: MOCK_SYNTHESIS, tokens: 0 });
     vi.mocked(startSpinner).mockReturnValue(mockStopSpinner);
     vi.mocked(applyCommand).mockResolvedValue(undefined);
     vi.mocked(fs.existsSync).mockReturnValue(false);
@@ -782,7 +785,7 @@ describe("runCommand", () => {
       ...MOCK_SYNTHESIS,
       patterns: [],
     };
-    vi.mocked(callClaudeForJson).mockResolvedValue(synthesisNoPatterns);
+    vi.mocked(callClaudeForJson).mockResolvedValue({ result: synthesisNoPatterns, tokens: 0 });
     await runCommand();
     const consoleCalls = vi.mocked(console.log).mock.calls.flat().join(" ");
     expect(consoleCalls).toContain("none");

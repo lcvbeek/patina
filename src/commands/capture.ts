@@ -167,7 +167,8 @@ async function synthesiseCapture(capture: Capture, cwd: string): Promise<void> {
 
   let response: CaptureInsight;
   try {
-    response = await callClaudeForJson<CaptureInsight>(prompt);
+    const { result: captureResult } = await callClaudeForJson<CaptureInsight>(prompt);
+    response = captureResult;
     const tokens = estimateTokensFromChars(prompt.length + JSON.stringify(response).length);
     stopSpinner(tokens);
   } catch (err) {
