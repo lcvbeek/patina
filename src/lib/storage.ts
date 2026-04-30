@@ -2,6 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { z } from "zod";
+import { estimateTokensFromChars } from "./token-estimate.js";
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -345,7 +346,7 @@ export function writeMetrics(metrics: Metrics, cwd = process.cwd()): void {
 export function readPatinaDocTokens(cwd = process.cwd()): number {
   const file = path.join(cwd, LIVING_DOC_FILE);
   if (!fs.existsSync(file)) return 0;
-  return Math.ceil(fs.readFileSync(file, "utf-8").length / 4);
+  return estimateTokensFromChars(fs.readFileSync(file, "utf-8").length);
 }
 
 // ---------------------------------------------------------------------------

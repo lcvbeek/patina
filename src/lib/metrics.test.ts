@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   computeAggregates,
+  computeCycleRoi,
   computeTrend,
   formatNumber,
   formatDate,
   trendArrow,
 } from "./metrics.js";
-import type { SessionSummary } from "./storage.js";
+import type { SessionSummary, Metrics } from "./storage.js";
 
 function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
@@ -205,5 +206,103 @@ describe("computeTrend", () => {
     ];
     const trend = computeTrend(sessions)!;
     expect(trend.token_delta_pct).toBeNull();
+  });
+});
+
+describe("computeCycleRoi", () => {
+  function makeMetrics(cycles: Metrics["cycles"]): Metrics {
+    return {
+      last_updated: "2025-01-01T00:00:00Z",
+      cycles,
+    };
+  }
+
+  it("uses null baseline deltas for the first cycle", () => {
+    const roi = computeCycleRoi(
+      makeMetrics([
+        {
+          cycle_id: "2025-01-10",
+          created_at: "2025-01-10T10:00:00Z",
+          session_count: 4,
+          total_tokens: 1200,
+          rework_count: 1,
+          synthesis_tokens: 60,
+          patina_md_tokens: 20,
+        },
+      ]),
+      300,
+    );
+
+    expect(roi.has_enough_data).toBe(false);
+    expect(roi.history).toHaveLength(1);
+    expect(roi.latest?.rework_delta_pp).toBeNull();
+    expect(roi.latest?.est_sessions_avoided).toBeNull();
+    expect(roi.latest?.est_tokens_saved).toBeNull();
+    expect(roi.latest?.net_tokens).toBeNull();
+  });
+
+  it("estimates avoided sessions and net tokens when rework improves", () => {
+    const roi = computeCycleRoi(
+      makeMetrics([
+        {
+          cycle_id: "2025-01-10",
+          created_at: "2025-01-10T10:00:00Z",
+          session_count: 10,
+          total_tokens: 5000,
+          rework_count: 4,
+          synthesis_tokens: 10,
+          patina_md_tokens: 1,
+        },
+        {
+          cycle_id: "2025-01-20",
+          created_at: "2025-01-20T10:00:00Z",
+          session_count: 10,
+          total_tokens: 5000,
+          rework_count: 2,
+          synthesis_tokens: 50,
+          patina_md_tokens: 5,
+        },
+      ]),
+      100,
+    );
+
+    expect(roi.has_enough_data).toBe(true);
+    expect(roi.latest?.rework_delta_pp).toBe(-20);
+    expect(roi.latest?.overhead_tokens).toBe(100);
+    expect(roi.latest?.est_sessions_avoided).toBe(2);
+    expect(roi.latest?.est_tokens_saved).toBe(400);
+    // sanity: net = tokens_saved - overhead
+    expect(roi.latest?.net_tokens).toBe(300);
+  });
+
+  it("does not estimate savings when rework worsens", () => {
+    const roi = computeCycleRoi(
+      makeMetrics([
+        {
+          cycle_id: "2025-01-10",
+          created_at: "2025-01-10T10:00:00Z",
+          session_count: 10,
+          total_tokens: 5000,
+          rework_count: 2,
+          synthesis_tokens: 0,
+          patina_md_tokens: 0,
+        },
+        {
+          cycle_id: "2025-01-20",
+          created_at: "2025-01-20T10:00:00Z",
+          session_count: 10,
+          total_tokens: 5000,
+          rework_count: 5,
+          synthesis_tokens: 50,
+          patina_md_tokens: 5,
+        },
+      ]),
+      100,
+    );
+
+    expect(roi.latest?.rework_delta_pp).toBe(30);
+    expect(roi.latest?.est_sessions_avoided).toBeNull();
+    expect(roi.latest?.est_tokens_saved).toBeNull();
+    expect(roi.latest?.net_tokens).toBeNull();
   });
 });
