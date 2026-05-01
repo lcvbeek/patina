@@ -107,7 +107,8 @@ export interface OnboardingResponse {
 // ---------------------------------------------------------------------------
 
 async function callClaude(prompt: string): Promise<OnboardingResponse> {
-  return callClaudeForJson<OnboardingResponse>(prompt);
+  const { result } = await callClaudeForJson<OnboardingResponse>(prompt);
+  return result;
 }
 
 // ---------------------------------------------------------------------------

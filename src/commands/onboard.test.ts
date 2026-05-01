@@ -435,7 +435,7 @@ describe("onboardCommand", () => {
   const CWD = "/test/cwd";
 
   beforeEach(() => {
-    vi.mocked(callClaudeForJson).mockResolvedValue(MOCK_RESPONSE);
+    vi.mocked(callClaudeForJson).mockResolvedValue({ result: MOCK_RESPONSE, tokens: 0 });
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(TEMPLATE_DOC);
     vi.mocked(fs.writeFileSync).mockReturnValue(undefined);

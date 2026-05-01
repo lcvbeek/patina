@@ -464,7 +464,7 @@ describe("captureCommand with --synth flag", () => {
   beforeEach(() => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue("# PATINA.md\n\n## 1. Working Agreements\n");
-    vi.mocked(callClaudeForJson).mockResolvedValue(synthResponse);
+    vi.mocked(callClaudeForJson).mockResolvedValue({ result: synthResponse, tokens: 0 });
   });
 
   it("calls Claude when --synth is set", async () => {

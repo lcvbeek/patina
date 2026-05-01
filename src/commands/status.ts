@@ -6,12 +6,14 @@ import {
   getLatestCycleDate,
   readConfig,
   getSessionsInCycle,
+  readMetrics,
   LIVING_DOC_FILE,
   CORE_MAX_LINES,
 } from "../lib/storage.js";
 import {
   computeAggregates,
   computeTrend,
+  computeCycleRoi,
   formatNumber,
   formatDate,
   trendArrow,
@@ -87,9 +89,10 @@ export async function statusCommand(): Promise<void> {
     return;
   }
 
+  const cwd = process.cwd();
   const agg = computeAggregates(sessions);
   const trend = computeTrend(sessions);
-  const livingDocPath = path.join(process.cwd(), LIVING_DOC_FILE);
+  const livingDocPath = path.join(cwd, LIVING_DOC_FILE);
   const coreEstimate = fs.existsSync(livingDocPath)
     ? estimateTextTokens(fs.readFileSync(livingDocPath, "utf-8"))
     : null;
@@ -146,6 +149,82 @@ export async function statusCommand(): Promise<void> {
     console.log(dim("  Not enough data for trend analysis (need ≥ 4 sessions)."));
   }
 
+  // ── Cycle cost estimate ───────────────────────────────────────────────────
+  const metrics = readMetrics(cwd);
+  if (metrics.cycles.length > 0) {
+    const roi = computeCycleRoi(metrics, agg.avg_tokens_per_session);
+    const latest = roi.latest;
+
+    if (latest) {
+      section(`Cycle cost estimate  (${latest.date})`);
+
+      const patinaMdEntry = metrics.cycles.find((c) => c.cycle_id === latest.date);
+      const patinaMdTokens = patinaMdEntry?.patina_md_tokens ?? 0;
+      const synthesisTokens = patinaMdEntry?.synthesis_tokens ?? 0;
+      const sessionCount = patinaMdEntry?.session_count ?? 0;
+
+      const contextCost = patinaMdTokens * sessionCount;
+      if (patinaMdTokens > 0) {
+        console.log(
+          `  PATINA.md context   ~${formatNumber(patinaMdTokens)} tokens × ${sessionCount} sessions = ~${formatNumber(contextCost)} tokens`,
+        );
+      }
+      if (synthesisTokens > 0) {
+        console.log(`  patina run          ~${formatNumber(synthesisTokens)} tokens`);
+      }
+      console.log(`  Total overhead      ~${formatNumber(latest.overhead_tokens)} tokens`);
+      console.log();
+
+      if (!roi.has_enough_data) {
+        console.log(
+          `  Rework rate         ${latest.rework_rate_pct}%  ${dim("(first cycle — run again to track trend)")}`,
+        );
+      } else {
+        const deltaStr =
+          latest.rework_delta_pp !== null
+            ? latest.rework_delta_pp < 0
+              ? green(`↓ from ${latest.rework_rate_pct - (latest.rework_delta_pp ?? 0)}%, ${latest.rework_delta_pp}pp`)
+              : latest.rework_delta_pp > 0
+                ? red(`↑ from ${latest.rework_rate_pct - (latest.rework_delta_pp ?? 0)}%, +${latest.rework_delta_pp}pp`)
+                : dim("→ unchanged")
+            : "";
+
+        console.log(`  Rework rate         ${latest.rework_rate_pct}%  ${deltaStr}`);
+
+        if (latest.est_tokens_saved !== null && latest.net_tokens !== null) {
+          console.log(
+            `  Est. tokens saved   ~${formatNumber(latest.est_tokens_saved)}  ${dim("(if rework drop is Patina working)")}`,
+          );
+          const netStr = formatNumber(Math.abs(latest.net_tokens));
+          const netSign = latest.net_tokens >= 0 ? "+" : "−";
+          const netColour =
+            latest.net_tokens >= 0
+              ? green
+              : latest.rework_delta_pp !== null && latest.rework_delta_pp < 0
+                ? yellow
+                : red;
+          console.log(`  Net this cycle      ${netColour(`${netSign}${netStr}`)}`);
+        } else if (latest.rework_delta_pp !== null && latest.rework_delta_pp >= 0) {
+          console.log(dim("  Rework did not improve this cycle — no savings estimated."));
+        }
+
+        // 3-cycle trend
+        const recentHistory = roi.history.slice(-3);
+        if (recentHistory.length >= 2) {
+          const trendLine = recentHistory.map((e) => `${e.rework_rate_pct}%`).join(" → ");
+          const lastEntry = recentHistory[recentHistory.length - 1];
+          const firstEntry = recentHistory[0];
+          const improving = lastEntry.rework_rate_pct < firstEntry.rework_rate_pct;
+          console.log(
+            `\n  ${recentHistory.length}-cycle trend       ${trendLine} rework  ${improving ? green("✓") : red("✗")}`,
+          );
+        }
+      }
+
+      console.log(dim("\n  Rework reduction may have other causes — treat as directional."));
+    }
+  }
+
   // ── Tool usage ────────────────────────────────────────────────────────────
   if (agg.tool_usage.length > 0) {
     section("Top tool usage");
@@ -195,7 +274,6 @@ export async function statusCommand(): Promise<void> {
   }
 
   // ── Context Load ──────────────────────────────────────────────────────────
-  const cwd = process.cwd();
   const globalMcp = readGlobalMcpServers(cwd);
   const projectMcp = readProjectMcpServers(cwd);
   const activeGlobal = activeServers(globalMcp);
