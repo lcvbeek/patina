@@ -26,6 +26,7 @@ vi.mock("../lib/storage.js", async (importOriginal) => {
     loadOpportunityBacklog: vi.fn(() => null),
     readMetrics: vi.fn(() => ({ last_updated: "", cycles: [] })),
     writeMetrics: vi.fn(),
+    mergeAndWriteMetrics: vi.fn(),
     readPatinaDocTokens: vi.fn(() => 0),
     LIVING_DOC_FILE: ".patina/PATINA.md",
     CORE_MAX_LINES: 80,
@@ -104,7 +105,7 @@ import {
   loadSpokeFiles,
   loadOpportunityBacklog,
   readMetrics,
-  writeMetrics,
+  mergeAndWriteMetrics,
   readPatinaDocTokens,
 } from "../lib/storage.js";
 import { runIngest } from "./ingest.js";
@@ -777,43 +778,16 @@ describe("runCommand", () => {
     expect(applyCommand).toHaveBeenCalledWith({ yes: true });
   });
 
-  it("replaces same-day cycle metrics instead of appending a duplicate", async () => {
+  it("writes a fresh metrics entry for today via mergeAndWriteMetrics", async () => {
     const today = new Date().toISOString().slice(0, 10);
     vi.mocked(callClaudeForJson).mockResolvedValue({ result: MOCK_SYNTHESIS, tokens: 321 });
     vi.mocked(readPatinaDocTokens).mockReturnValue(42);
-    vi.mocked(readMetrics).mockReturnValue({
-      last_updated: "2025-01-01T00:00:00Z",
-      cycles: [
-        {
-          cycle_id: "2025-01-01",
-          created_at: "2025-01-01T01:00:00Z",
-          session_count: 3,
-          total_tokens: 3000,
-          rework_count: 1,
-          synthesis_tokens: 11,
-          patina_md_tokens: 12,
-        },
-        {
-          cycle_id: today,
-          created_at: "2025-01-02T01:00:00Z",
-          session_count: 99,
-          total_tokens: 9999,
-          rework_count: 9,
-          synthesis_tokens: 999,
-          patina_md_tokens: 999,
-        },
-      ],
-    });
 
     await runCommand();
 
-    expect(writeMetrics).toHaveBeenCalledOnce();
-    const [writtenMetrics] = vi.mocked(writeMetrics).mock.calls[0];
-    expect(writtenMetrics.cycles).toHaveLength(2);
-
-    const todayRows = writtenMetrics.cycles.filter((c) => c.cycle_id === today);
-    expect(todayRows).toHaveLength(1);
-    expect(todayRows[0]).toMatchObject({
+    expect(mergeAndWriteMetrics).toHaveBeenCalledOnce();
+    const [, entry] = vi.mocked(mergeAndWriteMetrics).mock.calls[0];
+    expect(entry).toMatchObject({
       cycle_id: today,
       session_count: 1,
       total_tokens: 1000,

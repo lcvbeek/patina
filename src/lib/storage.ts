@@ -262,6 +262,7 @@ export const MetricsSchema = z.object({
 });
 
 export type Metrics = z.infer<typeof MetricsSchema>;
+export type CycleEntry = Metrics["cycles"][number];
 
 // ---------------------------------------------------------------------------
 // File I/O helpers
@@ -341,6 +342,24 @@ export function readMetrics(cwd = process.cwd()): Metrics {
 export function writeMetrics(metrics: Metrics, cwd = process.cwd()): void {
   const validated = MetricsSchema.parse(metrics);
   writeJson(path.join(getDataDir(cwd), "metrics.json"), validated);
+}
+
+/**
+ * Append the cycle entry to metrics.cycles, replacing any prior entry with the
+ * same cycle_id, then persist. Returns the updated Metrics value.
+ */
+export function mergeAndWriteMetrics(cwd: string, nextEntry: CycleEntry): Metrics {
+  const metrics = readMetrics(cwd);
+  const cycles = metrics.cycles.some((c) => c.cycle_id === nextEntry.cycle_id)
+    ? metrics.cycles.map((c) => (c.cycle_id === nextEntry.cycle_id ? nextEntry : c))
+    : [...metrics.cycles, nextEntry];
+  const updated: Metrics = {
+    ...metrics,
+    last_updated: new Date().toISOString(),
+    cycles,
+  };
+  writeMetrics(updated, cwd);
+  return updated;
 }
 
 export function readPatinaDocTokens(cwd = process.cwd()): number {
